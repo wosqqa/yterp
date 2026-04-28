@@ -1,12 +1,24 @@
 # Build and Release Folders
 bin-debug/
 bin-release/
-api/node_modules/
 [Oo]bj/
 [Bb]in/
 # Other files and folders
 .settings/
 .DS_Store
+.env
+.env.*
+*.log
+
+# Node
+**/node_modules/
+**/dist/
+**/.cache/
+**/.turbo/
+**/.parcel-cache/
+
+# PHP (ThinkPHP)
+serve/runtime/
 # Executables
 *.swf
 *.air
