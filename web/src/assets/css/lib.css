@@ -193,6 +193,13 @@
 	text-align: center;
 	border: none !important;
 }
+.ag-theme-balham.ag-pic-mode .ag-cell:not(.ag-cell-inline-editing){
+	display: flex;
+	align-items: center;
+}
+.ag-theme-balham.ag-pic-mode .ag-cell:not(.ag-cell-inline-editing) .ag-cell-value{
+	width: 100%;
+}
 .ag-theme-balham .ag-cell-focus{
 	background: rgba(224, 224, 224, 0.5);
 }
@@ -485,4 +492,3 @@
 .el-tooltip__popper{
 	padding: 6px;
 }
-

@@ -110,7 +110,7 @@
             class="homeLabel"
           >
             <el-tab-pane
-              v-for="(item, index) in label.items"
+              v-for="item in label.items"
               :label="item.label"
               :name="item.name"
               :key="item.name"
@@ -169,19 +169,19 @@
       <template v-if="theme.dialog">
         <ul class="themeGroup">
           <template v-for="(vo, index) of theme.nums">
-            <template v-for="(v, i) of 3">
-              <li
-                :class="[
-                  'T_' + index + '_' + i,
-                  { selected: theme.name == 'theme_' + index + '_' + i },
-                ]"
-                @click="setTheme(index + '_' + i)"
-              >
-                <div class="lt"></div>
-                <div class="tr"></div>
-                <div class="lb"></div>
-              </li>
-            </template>
+            <li
+              v-for="n in 3"
+              :key="index + '_' + (n - 1)"
+              :class="[
+                'T_' + index + '_' + (n - 1),
+                { selected: theme.name == 'theme_' + index + '_' + (n - 1) },
+              ]"
+              @click="setTheme(index + '_' + (n - 1))"
+            >
+              <div class="lt"></div>
+              <div class="tr"></div>
+              <div class="lb"></div>
+            </li>
           </template>
         </ul>
       </template>
@@ -471,22 +471,19 @@ export default {
     },
     //退出登录
     signOut() {
-      this.$axios.post("service/out").then((result) => {
-        if (result.state == "success") {
+      this.$axios
+        .post("service/out")
+        .then((result) => {
+          if (result && result.state && result.state != "success") {
+            const msg = result.state == "error" ? result.info : "[ ERROR ] 服务器响应超时!";
+            this.$message && this.$message({ type: "warning", message: msg });
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
           this.$store.commit("upState", { key: "token", val: "" });
           this.$router.push({ name: "Login" });
-        } else if (result.state == "error") {
-          this.$message({
-            type: "warning",
-            message: result.info,
-          });
-        } else {
-          this.$message({
-            type: "error",
-            message: "[ ERROR ] 服务器响应超时!",
-          });
-        }
-      });
+        });
     },
     //组件刷新|总线事件
     homeReload(exclude = null) {

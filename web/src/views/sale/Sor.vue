@@ -37,7 +37,7 @@
       </el-form-item>
       <el-divider class="fistDivider"></el-divider>
       <ag-grid-vue
-        class="ag-theme-balham"
+        :class="['ag-theme-balham', picVisible ? 'ag-pic-mode' : '']"
         :context="grid.context"
         :defaultColDef="grid.coldef"
         :gridOptions="grid.options"
@@ -133,6 +133,10 @@
             (form.examine == 0 && $lib.getUserRoot(store.root, 'sor', 'edit'))
           "
         >
+          <el-button type="info" @click="goodsViewOpen">视图</el-button>
+          <el-button type="info" @click="togglePics">{{
+            picVisible ? "隐藏图片" : "图片"
+          }}</el-button>
           <el-button type="info" @click="save">保存</el-button>
         </template>
         <template v-if="form.id != 0">
@@ -188,6 +192,13 @@
       :parm="goods.parm"
       @choice="pushGrid"
     ></GoodsList>
+    <GoodsView
+      v-if="goods.viewDialog"
+      @destroy="goodsViewDestroy"
+      :parm="goods.parm"
+      :value="goodsViewValue"
+      @input="goodsViewInput"
+    ></GoodsView>
   </div>
 </template>
 <script>
@@ -210,6 +221,7 @@ import NodUpload from "@/components/lib/NodUpload";
 import Logistics from "@/components/lib/Logistics";
 import FieldForm from "@/components/lib/FieldForm";
 import GoodsList from "@/components/dialog/GoodsList";
+import GoodsView from "@/components/dialog/GoodsView";
 
 export default {
   name: "Sor",
@@ -222,6 +234,7 @@ export default {
     Logistics,
     FieldForm,
     GoodsList,
+    GoodsView,
   },
   props: {
     source: {
@@ -288,6 +301,9 @@ export default {
           onGridReady: () => {
             this.$grid.addGridRow(this.grid.options);
           },
+          getRowHeight: (params) => {
+            return params.context.isPicVisible() ? 60 : 32;
+          },
           onCellEditingStopped: (grid) => {
             grid.context.runHandleGrid();
           },
@@ -300,6 +316,9 @@ export default {
             } else {
               this.handleGrid();
             }
+          },
+          isPicVisible: () => {
+            return this.picVisible;
           },
         },
         coldef: {
@@ -342,6 +361,24 @@ export default {
             cellRenderer: "setter",
             hide: false,
             dispose: false,
+          },
+          {
+            headerName: "图片",
+            width: 70,
+            field: "imgs",
+            hide: true,
+            dispose: false,
+            cellRenderer: (params) => {
+              const url = this.getImgUrl(params.data);
+              if (!url) return "";
+              return (
+                '<div style="width:100%;display:flex;align-items:center;justify-content:center;">' +
+                '<img src="' +
+                url +
+                '" style="width:54px;height:54px;object-fit:contain;" />' +
+                "</div>"
+              );
+            },
           },
           {
             headerName: "商品名称",
@@ -505,8 +542,13 @@ export default {
       scan: false,
       goods: {
         dialog: false,
+        viewDialog: false,
         parm: {},
       },
+      goodsViewValue: [],
+      goodsViewSyncingFromView: false,
+      goodsViewSyncingFromGrid: false,
+      picVisible: false,
     };
   },
   computed: {
@@ -519,6 +561,156 @@ export default {
     this.init();
   },
   methods: {
+    goodsViewInput(val) {
+      this.goodsViewValue = Array.isArray(val) ? val : [];
+      this.goodsViewSyncingFromView = true;
+      this.syncGridFromGoodsView(this.goodsViewValue);
+      this.$nextTick(() => {
+        this.goodsViewSyncingFromView = false;
+      });
+    },
+    goodsViewChoice() {
+      this.goods.viewDialog = false;
+      this.goods.parm = {};
+    },
+    buildGridRowFromGoods(item) {
+      const goods = item || {};
+      const priceType = "sell";
+      const unitData = Array.isArray(goods.units) ? goods.units : [];
+      const unitVal = goods.unit == null ? "" : goods.unit;
+      const row = {
+        uniqid: this.$lib.getUniqid(),
+        key: goods.id,
+        goodsType: goods.type,
+        imgs: goods.imgs,
+        unitData,
+        unitRelation: {
+          valence: goods[priceType],
+          multiple: 1,
+        },
+        warehouseId: null,
+        name: goods.name,
+        number: goods.number,
+        spec: goods.spec,
+        attr: "",
+        unit: unitVal == "-1" ? "点击选择" : unitVal,
+        warehouse: goods.type == 0 ? "点击选择" : "",
+        price: goods[priceType] == null || goods[priceType] === "" ? 0 : goods[priceType],
+        nums: item.nums == null || item.nums === "" ? 1 : item.nums,
+        handle: 0,
+        discount: this.$lib.gradeDiscount(this.customer.grade, goods.strategy),
+        dsc: 0,
+        total: null,
+        tax: this.store.sys.fun.rate,
+        tat: null,
+        tpt: null,
+        data: "",
+      };
+      return row;
+    },
+    syncGridFromGoodsView(selection) {
+      const api = this.grid.options.api;
+      if (!api) return;
+
+      const list = Array.isArray(selection) ? selection : [];
+      const pickedMap = {};
+      const pickedOrder = [];
+      list.forEach((item) => {
+        if (!item) return;
+        const id = Number(item.id);
+        if (!id) return;
+        const nums = item.nums == null || item.nums === "" ? 1 : Number(item.nums);
+        pickedMap[id] = pickedMap[id]
+          ? Object.assign({}, pickedMap[id], {
+              nums: this.$calc.chain(pickedMap[id].nums || 0).add(nums || 0).done(),
+              raw: pickedMap[id].raw || item,
+            })
+          : { id, nums: nums || 0, raw: item };
+        pickedOrder.indexOf(id) === -1 && pickedOrder.push(id);
+      });
+
+      const current = this.$grid.getGridData(this.grid.options).filter((r) => r && r.key != null);
+      const currentMap = {};
+      current.forEach((row) => {
+        const key = Number(row.key);
+        if (!key) return;
+        currentMap[key] || (currentMap[key] = row);
+      });
+
+      const next = [];
+      pickedOrder.forEach((id) => {
+        const picked = pickedMap[id];
+        if (!picked) return;
+        const exist = currentMap[id];
+        if (exist) {
+          exist.nums = picked.nums;
+          next.push(exist);
+        } else {
+          const row = this.buildGridRowFromGoods(picked.raw);
+          row.nums = picked.nums;
+          next.push(row);
+        }
+      });
+
+      api.setRowData(next);
+      this.$grid.addGridRow(this.grid.options);
+      this.handleGrid();
+    },
+    getGoodsViewSelected() {
+      const api = this.grid.options.api;
+      if (!api) return [];
+      const rows = [];
+      api.forEachNode((node) => {
+        if (!node || !node.data) return;
+        if (node.data.key == null) return;
+        rows.push(node.data);
+      });
+      return rows.map((r) => {
+        const unitData = Array.isArray(r.unitData) ? r.unitData : [];
+        return {
+          id: r.key,
+          name: r.name,
+          number: r.number,
+          spec: r.spec,
+          type: r.goodsType,
+          unit: unitData.length > 0 ? "-1" : r.unit,
+          units: unitData,
+          imgs: r.imgs,
+          sell: r.price,
+          strategy: [],
+          nums: r.nums == null || r.nums === "" ? 1 : r.nums,
+        };
+      });
+    },
+    togglePics() {
+      this.picVisible = !this.picVisible;
+      const api = this.grid.options.api;
+      const colApi = this.grid.options.columnApi;
+      if (!api || !colApi) return;
+      colApi.setColumnVisible("imgs", this.picVisible);
+      api.resetRowHeights && api.resetRowHeights();
+      api.sizeColumnsToFit && api.sizeColumnsToFit();
+    },
+    getImgUrl(row) {
+      const imgs = row ? row.imgs : null;
+      let val = "";
+      if (Array.isArray(imgs) && imgs.length > 0) {
+        const first = imgs[0];
+        val = typeof first == "string" ? first : first && first.url ? first.url : "";
+      } else if (imgs && typeof imgs == "object") {
+        val = imgs.url || "";
+      } else if (typeof imgs == "string") {
+        val = imgs;
+      }
+      if (this.$lib.validate("empty", val)) return "";
+      if (/^https?:\/\//.test(val)) return val;
+      return (this.store.base && this.store.base.cdnSite ? this.store.base.cdnSite : "") + val;
+    },
+    goodsViewOpen() {
+      this.goods.viewDialog = true;
+      this.goodsViewValue = this.getGoodsViewSelected();
+      this.goods.parm = {};
+    },
     //初始化
     init() {
       if (this.source == null) {
@@ -761,12 +953,24 @@ export default {
         //客户等级
         this.customer.grade = parm.grade;
         //人员信息
-        let contacts = JSON.parse(parm.contacts);
+        let contacts = [];
+        try {
+          contacts =
+            typeof parm.contacts == "string"
+              ? JSON.parse(parm.contacts)
+              : Array.isArray(parm.contacts)
+              ? parm.contacts
+              : [];
+        } catch (e) {
+          contacts = [];
+        }
         if (contacts.length > 0) {
           let contact = contacts.find((item) => item.main);
-          this.customer.more.push("姓名：" + contact.name);
-          this.customer.more.push("电话：" + contact.tel);
-          this.customer.more.push("地址：" + contact.add);
+          if (contact) {
+            this.customer.more.push("姓名：" + contact.name);
+            this.customer.more.push("电话：" + contact.tel);
+            this.customer.more.push("地址：" + contact.add);
+          }
         }
       }
     },
@@ -849,7 +1053,8 @@ export default {
           uniqid: this.$lib.getUniqid(),
           key: goods.id,
           goodsType: goods.type,
-          unitData: goods.units,
+          imgs: goods.imgs,
+          unitData: Array.isArray(goods.units) ? goods.units : [],
           unitRelation: {
             valence: goods[priceType],
             multiple: scene ? 1 : null,
@@ -869,8 +1074,8 @@ export default {
               ? "点击选择"
               : ""
             : this.$lib.objectSeek(item, "warehouseData|name"),
-          price: scene ? goods[priceType] : item.price,
-          nums: item.nums,
+          price: scene ? (goods[priceType] == null || goods[priceType] === "" ? 0 : goods[priceType]) : item.price,
+          nums: item.nums == null || item.nums === "" ? 1 : item.nums,
           handle: scene ? 0 : item.handle,
           discount: scene
             ? this.$lib.gradeDiscount(this.customer.grade, item.strategy)
@@ -1008,6 +1213,13 @@ export default {
         );
         //汇总信息
         this.summary();
+        if (this.goods.viewDialog && !this.goodsViewSyncingFromView) {
+          this.goodsViewSyncingFromGrid = true;
+          this.goodsViewValue = this.getGoodsViewSelected();
+          this.$nextTick(() => {
+            this.goodsViewSyncingFromGrid = false;
+          });
+        }
       }
       return effect;
     },
@@ -1024,6 +1236,10 @@ export default {
       this.goods.dialog = false;
       this.goods.parm = {};
       this.$grid.startEditingLastCell(this.grid.options, "name");
+    },
+    goodsViewDestroy() {
+      this.goods.viewDialog = false;
+      this.goods.parm = {};
     },
 
     //切换页面

@@ -737,12 +737,24 @@ export default {
         //税率信息
         this.supplier.rate = parseFloat(parm.rate);
         //人员信息
-        let contacts = JSON.parse(parm.contacts);
+        let contacts = [];
+        try {
+          contacts =
+            typeof parm.contacts == "string"
+              ? JSON.parse(parm.contacts)
+              : Array.isArray(parm.contacts)
+              ? parm.contacts
+              : [];
+        } catch (e) {
+          contacts = [];
+        }
         if (contacts.length > 0) {
           let contact = contacts.find((item) => item.main);
-          this.supplier.more.push("姓名：" + contact.name);
-          this.supplier.more.push("电话：" + contact.tel);
-          this.supplier.more.push("地址：" + contact.add);
+          if (contact) {
+            this.supplier.more.push("姓名：" + contact.name);
+            this.supplier.more.push("电话：" + contact.tel);
+            this.supplier.more.push("地址：" + contact.add);
+          }
         }
       }
     },

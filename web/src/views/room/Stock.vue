@@ -17,9 +17,7 @@
 					</el-form-item>
 					<el-form-item>
 						<el-select v-model="searchFrom.brand" placeholder="请选择商品品牌" clearable>
-							<template v-for="brand in store.sys.brand">
-								<el-option :label="brand" :value="brand"></el-option>
-							</template>
+							<el-option v-for="brand in store.sys.brand" :key="brand" :label="brand" :value="brand"></el-option>
 						  </el-select>
 					</el-form-item>
 					<el-form-item>
@@ -27,9 +25,7 @@
 					</el-form-item>
 					<el-form-item>
 						<el-select v-model="searchFrom.warehouse" placeholder="请选择仓库信息" multiple collapse-tags>
-							<template v-for="warehouse in store.warehouse">
-								<el-option :label="warehouse.name" :value="warehouse.id"></el-option>
-							</template>
+							<el-option v-for="warehouse in store.warehouse" :key="warehouse.id" :label="warehouse.name" :value="warehouse.id"></el-option>
 						</el-select>
 					</el-form-item>
 					<el-form-item>
@@ -45,12 +41,33 @@
 				<el-button slot="reference" icon="el-icon-more"></el-button>
 			</el-popover>
 			<el-button-group>
+				<el-button @click="toggleView">{{ viewMode ? '列表' : '视图' }}</el-button>
+				<el-button type="primary" @click="toggleInStock">{{ inStockOnly ? '全部' : '有库存' }}</el-button>
+				<el-button @click="togglePics">{{ picMode ? '隐藏图片' : '图片' }}</el-button>
 				<el-button @click="exports">导出</el-button>
 				<el-button @click="reload">刷新</el-button>
 			</el-button-group>
 		</div>
 		<el-divider></el-divider>
+		<div v-if="viewMode" class="viewWrap">
+			<div class="goodsGrid">
+				<div v-for="row in viewList" :key="row.key" class="goodsCard" @click="showStockDetail(row)">
+					<div class="cardImg">
+						<el-image v-if="getImgUrl(row)" :src="getImgUrl(row)" fit="contain">
+							<div slot="error" class="imgError">
+								<i class="el-icon-picture-outline"></i>
+							</div>
+						</el-image>
+						<div v-else class="imgError">
+							<i class="el-icon-picture-outline"></i>
+						</div>
+					</div>
+					<div class="cardQty">{{ Number(row.summary) || 0 }}</div>
+				</div>
+			</div>
+		</div>
 		<el-table
+			v-else
 			:data="tableData"
 			:tree-props="{children: 'attr'}"
 			row-key="key"
@@ -58,8 +75,26 @@
 			border
 			v-madeTable
 		>
+			<el-table-column v-if="picMode" label="图片" align="center" width="100px" fixed="left">
+				<template slot-scope="scope">
+					<div class="tableImg">
+						<el-image v-if="getImgUrl(scope.row)" :src="getImgUrl(scope.row)" fit="contain">
+							<div slot="error" class="imgErrorMini">
+								<i class="el-icon-picture-outline"></i>
+							</div>
+						</el-image>
+						<div v-else class="imgErrorMini">
+							<i class="el-icon-picture-outline"></i>
+						</div>
+					</div>
+				</template>
+			</el-table-column>
 			<el-table-column prop="name" label="商品名称" align="left" width="160px" fixed="left"></el-table-column>
-			<el-table-column prop="summary" label="库存数量" align="center" width="120px"></el-table-column>
+			<el-table-column prop="summary" label="库存数量" align="center" width="120px">
+				<template slot-scope="scope">
+					<span class="stockQty">{{ scope.row.summary }}</span>
+				</template>
+			</el-table-column>
 			<el-table-column label="仓库" align="center">
 				<div v-for="column in tableColumn" :key="column.key">
 					<el-table-column :prop="column.key" :label="column.name" align="center" width="90px"></el-table-column>
@@ -108,6 +143,9 @@
 				},
 				tableData: [],
 				tableColumn:[],
+				picMode: false,
+				viewMode: false,
+				inStockOnly: false,
 				page: {
 					current: 1,
 					total: 0,
@@ -128,9 +166,40 @@
 			//读取数据中心
 			store() {
 				return this.$store.state;
+			},
+			viewList() {
+				return this.tableData.filter(row => !row || !row.hasOwnProperty('pid'));
 			}
 		},
 		methods: {
+			toggleView(){
+				this.viewMode=!this.viewMode;
+				this.viewMode && (this.picMode=false);
+			},
+			toggleInStock() {
+				this.inStockOnly = !this.inStockOnly;
+				this.searchFrom.state = this.inStockOnly ? 1 : 0;
+				this.record(1);
+			},
+			togglePics() {
+				this.picMode = !this.picMode;
+			},
+			getImgUrl(row) {
+				const goods = row && row.hasOwnProperty('pid') ? this.tableData.find(item => item.id == row.pid) : row;
+				const imgs = goods ? goods.imgs : null;
+				let val = "";
+				if (Array.isArray(imgs) && imgs.length > 0) {
+					const first = imgs[0];
+					val = typeof first == "string" ? first : first && first.url ? first.url : "";
+				} else if (imgs && typeof imgs == "object") {
+					val = imgs.url || "";
+				} else if (typeof imgs == "string") {
+					val = imgs;
+				}
+				if (this.$lib.validate("empty", val)) return "";
+				if (/^https?:\/\//.test(val)) return val;
+				return (this.store.base && this.store.base.cdnSite ? this.store.base.cdnSite : "") + val;
+			},
 			//获取数据
 			record(page) {
 				page==0||(this.page.current=page);
@@ -170,7 +239,6 @@
 			},
 			//库存详情
 			showStockDetail(row){
-				let goods=row.hasOwnProperty('pid')?this.tableData.find(item=>item.id==row.pid):row;
 				let obj=row.hasOwnProperty('pid')?{goods:row.pid,attr:row.name}:(row.attr.length>0?{goods:row.id}:{goods:row.id,attr:''});
 				obj.warehouse=this.tableColumn.map(item=>item.id);
 				this.stockDetailDialog.condition=obj;
@@ -195,5 +263,76 @@
 	}
 	.el-table >>> .el-table__row--level-1{
 		background: #fcfcfc;
+	}
+	.viewWrap{
+		height: calc(100% - 90px);
+		overflow: auto;
+	}
+	.goodsGrid{
+		display: grid;
+		grid-template-columns: repeat(auto-fill, 150px);
+		justify-content: start;
+		gap: 12px;
+		padding: 10px;
+	}
+	.goodsCard{
+		background: #fff;
+		border: 1px solid #ebeef5;
+		cursor: pointer;
+	}
+	.cardImg{
+		width: 100%;
+		height: 150px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.cardImg >>> .el-image{
+		width: 100%;
+		height: 100%;
+	}
+	.imgError{
+		width: 100%;
+		height: 150px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #c0c4cc;
+		background: #fafafa;
+	}
+	.cardQty{
+		height: 40px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #d40000;
+		font-weight: 700;
+		font-size: 18px;
+	}
+	.tableImg{
+		width: 70px;
+		height: 70px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		margin: 0 auto;
+	}
+	.tableImg >>> .el-image{
+		width: 100%;
+		height: 100%;
+	}
+	.imgErrorMini{
+		width: 70px;
+		height: 70px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #c0c4cc;
+		background: #fafafa;
+	}
+	.stockQty{
+		font-size: 18px;
+		color: #d40000;
+		font-weight: 700;
 	}
 </style>

@@ -9,9 +9,7 @@
 					</el-tooltip>
 				</span>
 				<el-dropdown-menu slot="dropdown">
-					<template v-for="list in lists">
-						<el-dropdown-item :command="list.key">{{list.name}}</el-dropdown-item>
-					</template>
+					<el-dropdown-item v-for="list in lists" :key="list.key" :command="list.key">{{list.name}}</el-dropdown-item>
 				</el-dropdown-menu>
 			</el-dropdown>
 		</template>
@@ -22,9 +20,7 @@
 					<el-divider direction="vertical"></el-divider>
 					<el-popover placement="top" trigger="hover">
 						<ul class="moreInfo">
-							<template v-for="item in more">
-								<li>{{item}}</li>
-							</template>
+							<li v-for="(item,index) in more" :key="index">{{item}}</li>
 						</ul>
 						<i class="el-icon-arrow-down" slot="reference"></i>
 					</el-popover>
@@ -84,7 +80,7 @@
 			//初始化
 			init(){
 				//初始数据
-				this.store.sys.logistics.forEach(item=>{
+				(this.store.sys.logistics || []).forEach(item=>{
 					item.enable&&this.lists.push(item);
 				})
 			},

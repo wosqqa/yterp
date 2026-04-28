@@ -469,6 +469,7 @@
                 >删除</el-button
               >
             </template>
+            <el-button @click="printShow(scope.row)" size="mini">订单</el-button>
             <el-popover
               class="btnGroupPopover"
               type="right"
@@ -484,7 +485,7 @@
               ></el-button>
               <ul>
                 <template v-for="item in scope.row.recordData">
-                  <li>
+                  <li :key="item.id">
                     {{ item.extension.time }} - {{ item.userData.name }} -
                     {{ item.info }}
                   </li>
@@ -548,6 +549,19 @@
       </transition>
     </el-dialog>
     <el-dialog
+      class="billDialog"
+      :visible.sync="print.dialog"
+      title="订单"
+      :fullscreen="true"
+      @close="printDestroy"
+    >
+      <transition name="el-fade-in">
+        <template v-if="print.dialog">
+          <SorPrint action="sell/get" :source="print.source"></SorPrint>
+        </template>
+      </transition>
+    </el-dialog>
+    <el-dialog
       class="tabsDialog"
       :visible.sync="batch.dialog"
       title="批量"
@@ -604,6 +618,7 @@
 import Sell from "@/views/sale/Sell";
 import Sor from "@/views/sale/Sor";
 import Sre from "@/views/sale/Sre";
+import SorPrint from "@/views/sale/SorPrint";
 import NodList from "@/components/lib/NodList";
 import PageStatus from "@/components/lib/PageStatus";
 
@@ -613,6 +628,7 @@ export default {
     Sell,
     Sor,
     Sre,
+    SorPrint,
     NodList,
     PageStatus,
   },
@@ -626,7 +642,7 @@ export default {
         startTime: "",
         endTime: "",
         user: null,
-        examine: "",
+        examine: 1,
         nucleus: "",
         cse: "",
         invoice: "",
@@ -650,6 +666,10 @@ export default {
         ],
       },
       bill: {
+        dialog: false,
+        source: null,
+      },
+      print: {
         dialog: false,
         source: null,
       },
@@ -718,6 +738,14 @@ export default {
     //单据关闭
     billDestroy() {
       this.record(0); //获取数据
+    },
+    printShow(row) {
+      this.print.source = row && row.id ? row.id : null;
+      this.print.dialog = true;
+    },
+    printDestroy() {
+      this.print.dialog = false;
+      this.print.source = null;
     },
     //审核单据
     examine(type) {

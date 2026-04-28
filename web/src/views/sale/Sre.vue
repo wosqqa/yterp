@@ -736,12 +736,24 @@ export default {
         //客户等级
         this.customer.grade = parm.grade;
         //人员信息
-        let contacts = JSON.parse(parm.contacts);
+        let contacts = [];
+        try {
+          contacts =
+            typeof parm.contacts == "string"
+              ? JSON.parse(parm.contacts)
+              : Array.isArray(parm.contacts)
+              ? parm.contacts
+              : [];
+        } catch (e) {
+          contacts = [];
+        }
         if (contacts.length > 0) {
           let contact = contacts.find((item) => item.main);
-          this.customer.more.push("姓名：" + contact.name);
-          this.customer.more.push("电话：" + contact.tel);
-          this.customer.more.push("地址：" + contact.add);
+          if (contact) {
+            this.customer.more.push("姓名：" + contact.name);
+            this.customer.more.push("电话：" + contact.tel);
+            this.customer.more.push("地址：" + contact.add);
+          }
         }
       }
     },

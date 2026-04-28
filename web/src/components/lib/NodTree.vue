@@ -73,7 +73,7 @@
 					if(this.checkbox){
 						if(this.$lib.comparison(val,this.checkeds)){
 							this.checkeds=val;
-							this.$refs.tree.setCheckedKeys(val,true);
+							this.$refs.tree.setCheckedKeys(val);
 						}
 					}else{
 						if(val!=this.checked){

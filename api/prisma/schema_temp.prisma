@@ -1,0 +1,1453 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id     Int     @id @default(autoincrement())
+  name   String  @db.VarChar(32)
+  py     String  @db.VarChar(32)
+  tel    String  @db.VarChar(11)
+  frame  Int
+  role   Int
+  user   String  @db.VarChar(32)
+  pwd    String  @db.VarChar(32)
+  img    String  @db.Text
+  token  String? @default("") @db.VarChar(32)
+  expire Int
+  data   String  @db.VarChar(256)
+  more   String  @db.Text
+
+  @@index([expire], map: "expire")
+  @@index([frame], map: "frame")
+  @@index([name, py], map: "name_py")
+  @@index([role], map: "role")
+  @@index([tel], map: "tel")
+  @@index([user], map: "user")
+  @@map("is_user")
+}
+
+model Role {
+  id   Int    @id @default(autoincrement())
+  name String @db.VarChar(32)
+  data String @db.VarChar(256)
+  root String @db.Text
+  auth String @db.Text
+
+  @@index([name], map: "name")
+  @@map("is_role")
+}
+
+model Menu {
+  id       Int     @id @default(autoincrement())
+  pid      Int
+  name     String  @db.VarChar(32)
+  key      String  @db.VarChar(32)
+  model    Boolean
+  type     Boolean
+  resource String  @db.VarChar(128)
+  sort     Int?    @default(0)
+  ico      String  @db.VarChar(32)
+  root     String  @db.VarChar(32)
+  data     String  @db.VarChar(256)
+
+  @@index([model], map: "model")
+  @@index([name], map: "name")
+  @@index([pid], map: "pid")
+  @@index([sort], map: "sort")
+  @@index([type], map: "type")
+  @@map("is_menu")
+}
+
+model Code {
+  id   Int     @id @default(autoincrement())
+  name String  @db.VarChar(32)
+  info String  @db.VarChar(64)
+  type Boolean
+  data String  @db.VarChar(256)
+
+  @@index([type], map: "type")
+  @@map("is_code")
+}
+
+model Sys {
+  id   Int    @id @default(autoincrement())
+  name String @db.VarChar(32)
+  info String @db.Text
+  data String @db.VarChar(256)
+
+  @@index([name], map: "name")
+  @@map("is_sys")
+}
+
+model Customer {
+  id       Int      @id @default(autoincrement())
+  name     String   @db.VarChar(32)
+  py       String   @db.VarChar(32)
+  number   String   @db.VarChar(32)
+  frame    Int
+  user     Int
+  category String   @db.VarChar(32)
+  grade    String   @db.VarChar(32)
+  bank     String   @db.VarChar(32)
+  account  String   @db.VarChar(64)
+  tax      String   @db.VarChar(64)
+  data     String   @db.VarChar(256)
+  contacts String   @db.Text
+  balance  Decimal? @default(0.0000) @db.Decimal(16, 4)
+  more     String   @db.Text
+
+  @@index([frame], map: "frame")
+  @@index([name], map: "name")
+  @@index([user], map: "user")
+  @@map("is_customer")
+}
+
+model Supplier {
+  id       Int      @id @default(autoincrement())
+  name     String   @db.VarChar(32)
+  py       String   @db.VarChar(32)
+  number   String   @db.VarChar(32)
+  frame    Int
+  user     Int
+  category String   @db.VarChar(32)
+  rate     Decimal  @db.Decimal(5, 2)
+  bank     String   @db.VarChar(32)
+  account  String   @db.VarChar(64)
+  tax      String   @db.VarChar(64)
+  data     String   @db.VarChar(256)
+  contacts String   @db.Text
+  balance  Decimal? @default(0.0000) @db.Decimal(16, 4)
+  more     String   @db.Text
+
+  @@index([frame], map: "frame")
+  @@index([name, py], map: "name_py")
+  @@index([user], map: "user")
+  @@map("is_supplier")
+}
+
+model Goods {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(32)
+  py        String   @db.VarChar(32)
+  number    String   @db.VarChar(32)
+  spec      String   @db.VarChar(32)
+  category  Int
+  brand     String   @db.VarChar(32)
+  unit      String   @db.VarChar(32)
+  buy       Decimal  @db.Decimal(12, 4)
+  sell      Decimal  @db.Decimal(12, 4)
+  code      String   @db.VarChar(64)
+  location  String   @db.VarChar(64)
+  stock     Decimal  @db.Decimal(12, 4)
+  type      Boolean
+  data      String   @db.VarChar(256)
+  imgs      String   @db.Text
+  details   String   @db.Text
+  units     String   @db.Text
+  strategy  String   @db.Text
+  serial    Boolean? @default(false)
+  batch     Boolean? @default(false)
+  validity  Boolean? @default(false)
+  protect   Int?     @default(0) @db.SmallInt
+  threshold Int?     @default(0) @db.SmallInt
+  more      String   @db.Text
+
+  @@index([brand], map: "brand")
+  @@index([category], map: "category")
+  @@index([code], map: "code")
+  @@index([name, py], map: "name_py")
+  @@index([number], map: "number")
+  @@index([type], map: "type")
+  @@map("is_goods")
+}
+
+model Warehouse {
+  id       Int    @id @default(autoincrement())
+  name     String @db.VarChar(32)
+  number   String @db.VarChar(32)
+  frame    Int
+  contacts String @db.VarChar(32)
+  tel      String @db.VarChar(32)
+  add      String @db.VarChar(64)
+  data     String @db.VarChar(256)
+
+  @@index([frame], map: "frame")
+  @@index([name], map: "name")
+  @@map("is_warehouse")
+}
+
+model Account {
+  id      Int      @id @default(autoincrement())
+  name    String   @db.VarChar(32)
+  number  String   @db.VarChar(32)
+  frame   Int
+  time    Int
+  initial Decimal  @db.Decimal(16, 4)
+  balance Decimal? @default(0.0000) @db.Decimal(16, 4)
+  data    String?  @default("") @db.VarChar(256)
+
+  @@index([frame], map: "frame")
+  @@map("is_account")
+}
+
+model Room {
+  id        Int     @id @default(autoincrement())
+  warehouse Int
+  goods     Int
+  attr      String  @db.VarChar(64)
+  nums      Decimal @db.Decimal(12, 4)
+
+  @@index([goods], map: "goods")
+  @@index([warehouse], map: "warehouse")
+  @@map("is_room")
+}
+
+model Batch {
+  id        Int     @id @default(autoincrement())
+  room      Int
+  warehouse Int
+  goods     Int
+  number    String  @db.VarChar(64)
+  time      Int?    @default(0)
+  nums      Decimal @db.Decimal(12, 4)
+
+  @@index([goods], map: "goods")
+  @@index([room], map: "room")
+  @@index([time], map: "time")
+  @@index([warehouse], map: "warehouse")
+  @@map("is_batch")
+}
+
+model Sell {
+  id        Int     @id @default(autoincrement())
+  source    Int
+  frame     Int
+  customer  Int
+  time      Int
+  number    String  @db.VarChar(32)
+  total     Decimal @db.Decimal(16, 4)
+  actual    Decimal @db.Decimal(16, 4)
+  money     Decimal @db.Decimal(16, 4)
+  cost      Decimal @db.Decimal(16, 4)
+  account   Int?    @default(0)
+  people    Int?    @default(0)
+  logistics String? @db.Text
+  file      String? @db.Text
+  data      String? @default("") @db.VarChar(256)
+  more      String? @db.Text
+  examine   Boolean
+  nucleus   Boolean
+  cse       Boolean
+  invoice   Boolean
+  check     Boolean
+  user      Int
+
+  @@index([account], map: "account")
+  @@index([check], map: "check")
+  @@index([cse], map: "cse")
+  @@index([examine], map: "examine")
+  @@index([frame], map: "frame")
+  @@index([invoice], map: "invoice")
+  @@index([nucleus], map: "nucleus")
+  @@index([people], map: "people")
+  @@index([customer], map: "supplier")
+  @@index([time], map: "time")
+  @@index([user], map: "user")
+  @@map("is_sell")
+}
+
+model Imy {
+  id       Int     @id @default(autoincrement())
+  frame    Int
+  customer Int
+  time     Int
+  number   String  @db.VarChar(32)
+  total    Decimal @db.Decimal(16, 4)
+  people   Int?    @default(0)
+  file     String? @db.Text
+  data     String? @default("") @db.VarChar(256)
+  more     String? @db.Text
+  examine  Boolean
+  nucleus  Boolean
+  user     Int
+
+  @@index([examine], map: "examine")
+  @@index([frame], map: "frame")
+  @@index([nucleus], map: "nucleus")
+  @@index([people], map: "people")
+  @@index([customer], map: "supplier")
+  @@index([time], map: "time")
+  @@index([user], map: "user")
+  @@map("is_imy")
+}
+
+model Ice {
+  id       Int     @id @default(autoincrement())
+  frame    Int
+  customer Int?    @default(0)
+  time     Int
+  number   String  @db.VarChar(32)
+  total    Decimal @db.Decimal(16, 4)
+  actual   Decimal @db.Decimal(16, 4)
+  money    Decimal @db.Decimal(16, 4)
+  account  Int
+  people   Int?    @default(0)
+  file     String? @db.Text
+  data     String? @default("") @db.VarChar(256)
+  more     String? @db.Text
+  examine  Boolean
+  nucleus  Boolean
+  user     Int
+
+  @@index([account], map: "account")
+  @@index([customer], map: "customer")
+  @@index([examine], map: "examine")
+  @@index([frame], map: "frame")
+  @@index([nucleus], map: "nucleus")
+  @@index([people], map: "people")
+  @@index([time], map: "time")
+  @@index([user], map: "user")
+  @@map("is_ice")
+}
+
+model Buy {
+  id        Int     @id @default(autoincrement())
+  source    Int
+  frame     Int
+  supplier  Int
+  time      Int
+  number    String  @db.VarChar(32)
+  total     Decimal @db.Decimal(16, 4)
+  actual    Decimal @db.Decimal(16, 4)
+  money     Decimal @db.Decimal(16, 4)
+  cost      Decimal @db.Decimal(16, 4)
+  account   Int?    @default(0)
+  people    Int?    @default(0)
+  logistics String? @db.Text
+  file      String? @db.Text
+  data      String? @default("") @db.VarChar(256)
+  more      String? @db.Text
+  examine   Boolean
+  nucleus   Boolean
+  cse       Boolean
+  invoice   Boolean
+  check     Boolean
+  user      Int
+
+  @@index([check], map: "check")
+  @@index([cse], map: "cse")
+  @@index([examine], map: "examine")
+  @@index([frame], map: "frame")
+  @@index([invoice], map: "invoice")
+  @@index([nucleus], map: "nucleus")
+  @@index([people], map: "people")
+  @@index([source], map: "source")
+  @@index([supplier], map: "supplier")
+  @@index([time], map: "time")
+  @@index([user], map: "user")
+  @@map("is_buy")
+}
+
+model Bre {
+  id        Int     @id @default(autoincrement())
+  source    Int
+  frame     Int
+  supplier  Int
+  time      Int
+  number    String  @db.VarChar(32)
+  total     Decimal @db.Decimal(16, 4)
+  actual    Decimal @db.Decimal(16, 4)
+  money     Decimal @db.Decimal(16, 4)
+  cost      Decimal @db.Decimal(16, 4)
+  account   Int?    @default(0)
+  people    Int?    @default(0)
+  logistics String? @db.Text
+  file      String? @db.Text
+  data      String? @default("") @db.VarChar(256)
+  more      String? @db.Text
+  examine   Boolean
+  nucleus   Boolean
+  cse       Boolean
+  invoice   Boolean
+  check     Boolean
+  user      Int
+
+  @@index([check], map: "check")
+  @@index([cse], map: "cse")
+  @@index([examine], map: "examine")
+  @@index([frame], map: "frame")
+  @@index([invoice], map: "invoice")
+  @@index([nucleus], map: "nucleus")
+  @@index([people], map: "people")
+  @@index([source], map: "source")
+  @@index([supplier], map: "supplier")
+  @@index([time], map: "time")
+  @@index([user], map: "user")
+  @@map("is_bre")
+}
+
+model Sre {
+  id        Int     @id @default(autoincrement())
+  source    Int
+  frame     Int
+  customer  Int
+  time      Int
+  number    String  @db.VarChar(32)
+  total     Decimal @db.Decimal(16, 4)
+  actual    Decimal @db.Decimal(16, 4)
+  money     Decimal @db.Decimal(16, 4)
+  cost      Decimal @db.Decimal(16, 4)
+  account   Int?    @default(0)
+  people    Int?    @default(0)
+  logistics String? @db.Text
+  file      String? @db.Text
+  data      String? @default("") @db.VarChar(256)
+  more      String? @db.Text
+  examine   Boolean
+  nucleus   Boolean
+  cse       Boolean
+  invoice   Boolean
+  check     Boolean
+  user      Int
+
+  @@index([account], map: "account")
+  @@index([check], map: "check")
+  @@index([cse], map: "cse")
+  @@index([customer], map: "customer")
+  @@index([examine], map: "examine")
+  @@index([frame], map: "frame")
+  @@index([invoice], map: "invoice")
+  @@index([nucleus], map: "nucleus")
+  @@index([people], map: "people")
+  @@index([source], map: "source")
+  @@index([time], map: "time")
+  @@index([user], map: "user")
+  @@map("is_sre")
+}
+
+model Omy {
+  id       Int     @id @default(autoincrement())
+  frame    Int
+  supplier Int
+  time     Int
+  number   String  @db.VarChar(32)
+  total    Decimal @db.Decimal(16, 4)
+  people   Int?    @default(0)
+  file     String? @db.Text
+  data     String? @default("") @db.VarChar(256)
+  more     String? @db.Text
+  examine  Boolean
+  nucleus  Boolean
+  user     Int
+
+  @@index([examine], map: "examine")
+  @@index([frame], map: "frame")
+  @@index([nucleus], map: "nucleus")
+  @@index([people], map: "people")
+  @@index([supplier], map: "supplier")
+  @@index([time], map: "time")
+  @@index([user], map: "user")
+  @@map("is_omy")
+}
+
+model Summary {
+  id        Int     @id @default(autoincrement())
+  pid       Int
+  type      String  @db.VarChar(32)
+  class     Int
+  info      Int
+  time      Int
+  goods     Int
+  attr      String  @db.VarChar(64)
+  warehouse Int
+  batch     String  @db.VarChar(64)
+  mfd       Int
+  serial    String  @db.Text
+  direction Boolean
+  price     Decimal @db.Decimal(12, 4)
+  nums      Decimal @db.Decimal(12, 4)
+  uct       Decimal @db.Decimal(12, 4)
+  bct       Decimal @db.Decimal(12, 4)
+  exist     String  @db.Text
+  balance   String  @db.Text
+  handle    Decimal @db.Decimal(12, 4)
+
+  @@index([class], map: "class")
+  @@index([direction], map: "direction")
+  @@index([goods], map: "goods")
+  @@index([info], map: "info")
+  @@index([pid], map: "pid")
+  @@index([time], map: "time")
+  @@index([type], map: "type")
+  @@map("is_summary")
+}
+
+model Category {
+  id   Int    @id @default(autoincrement())
+  pid  Int
+  name String @db.VarChar(32)
+  sort Int?   @default(0)
+  data String @db.VarChar(256)
+
+  @@index([pid], map: "pid")
+  @@index([sort], map: "sort")
+  @@map("is_category")
+}
+
+model Frame {
+  id   Int    @id @default(autoincrement())
+  pid  Int
+  name String @db.VarChar(32)
+  sort Int?   @default(0)
+  data String @db.VarChar(256)
+
+  @@index([pid, sort], map: "pid_sort")
+  @@index([sort], map: "sort")
+  @@map("is_frame")
+}
+
+model Iet {
+  id   Int     @id @default(autoincrement())
+  name String  @db.VarChar(32)
+  type Boolean
+  sort Int
+  data String  @db.VarChar(256)
+
+  @@index([name], map: "name")
+  @@index([sort], map: "sort")
+  @@index([type], map: "type")
+  @@map("is_iet")
+}
+
+model Often {
+  id   Int    @id @default(autoincrement())
+  user Int
+  name String @db.VarChar(64)
+  key  String @db.VarChar(32)
+
+  @@index([name], map: "name")
+  @@index([user], map: "user")
+  @@map("is_often")
+}
+
+model Field {
+  id     Int    @id @default(autoincrement())
+  name   String @db.VarChar(32)
+  key    String @db.VarChar(32)
+  data   String @db.VarChar(256)
+  fields String @db.Text
+
+  @@index([key], map: "key")
+  @@map("is_field")
+}
+
+model Entry {
+  id        Int     @id @default(autoincrement())
+  supplier  Int
+  frame     Int
+  time      Int
+  number    String  @db.VarChar(32)
+  type      Boolean
+  total     Decimal @db.Decimal(16, 4)
+  cost      Decimal @db.Decimal(16, 4)
+  people    Int?    @default(0)
+  logistics String? @db.Text
+  file      String? @db.Text
+  data      String? @default("") @db.VarChar(265)
+  more      String? @db.Text
+  examine   Boolean
+  cse       Boolean
+  check     Boolean
+  user      Int
+
+  @@index([check], map: "check")
+  @@index([cse], map: "cse")
+  @@index([examine], map: "examine")
+  @@index([frame], map: "frame")
+  @@index([people], map: "people")
+  @@index([supplier], map: "supplier")
+  @@index([time], map: "time")
+  @@index([type], map: "type")
+  @@index([user], map: "user")
+  @@map("is_entry")
+}
+
+model EntryInfo {
+  id        Int     @id @default(autoincrement())
+  pid       Int
+  goods     Int
+  attr      String  @db.VarChar(64)
+  unit      String  @db.VarChar(32)
+  warehouse Int?    @default(0)
+  batch     String  @db.VarChar(32)
+  mfd       Int?    @default(0)
+  price     Decimal @db.Decimal(12, 4)
+  nums      Decimal @db.Decimal(12, 4)
+  serial    String  @db.Text
+  total     Decimal @db.Decimal(12, 4)
+  data      String  @db.VarChar(256)
+
+  @@index([goods], map: "goods")
+  @@index([pid], map: "pid")
+  @@map("is_entry_info")
+}
+
+model Cost {
+  id     Int      @id @default(autoincrement())
+  type   String   @db.VarChar(32)
+  class  Int
+  time   Int
+  iet    Int
+  money  Decimal  @db.Decimal(16, 4)
+  data   String?  @default("") @db.VarChar(256)
+  settle Decimal? @default(0.0000) @db.Decimal(16, 4)
+  state  Boolean?
+
+  @@index([class], map: "class")
+  @@index([iet], map: "iet")
+  @@index([state], map: "state")
+  @@index([time], map: "time")
+  @@index([type], map: "type")
+  @@map("is_cost")
+}
+
+model People {
+  id     Int     @id @default(autoincrement())
+  name   String  @db.VarChar(32)
+  py     String  @db.VarChar(32)
+  number String  @db.VarChar(32)
+  frame  Int
+  sex    Boolean
+  tel    String  @db.VarChar(32)
+  add    String  @db.VarChar(64)
+  card   String  @db.VarChar(32)
+  data   String  @db.VarChar(256)
+  more   String  @db.Text
+
+  @@index([frame], map: "frame")
+  @@index([name, py], map: "name_py")
+  @@index([sex], map: "user")
+  @@map("is_people")
+}
+
+model Attribute {
+  id   Int     @id @default(autoincrement())
+  name String  @db.VarChar(32)
+  sort Int
+  data String? @default("") @db.VarChar(256)
+
+  @@index([sort], map: "sort")
+  @@map("is_attribute")
+}
+
+model AttributeInfo {
+  id   Int    @id @default(autoincrement())
+  pid  Int
+  name String @db.VarChar(32)
+
+  @@index([pid], map: "pid")
+  @@map("is_attribute_info")
+}
+
+model Period {
+  id   Int @id @default(autoincrement())
+  date Int
+  time Int
+  user Int
+
+  @@index([date], map: "date")
+  @@index([time], map: "time")
+  @@index([user], map: "user")
+  @@map("is_period")
+}
+
+model Fifo {
+  id     Int     @id @default(autoincrement())
+  out    Int
+  in     Int
+  handle Decimal @db.Decimal(12, 4)
+
+  @@index([in], map: "in")
+  @@index([out], map: "out")
+  @@map("is_fifo")
+}
+
+model RoomInfo {
+  id        Int     @id @default(autoincrement())
+  pid       Int
+  type      String  @db.VarChar(32)
+  class     Int
+  info      Int
+  time      Int
+  direction Boolean
+  price     Decimal @db.Decimal(12, 4)
+  nums      Decimal @db.Decimal(12, 4)
+
+  @@index([class], map: "class")
+  @@index([direction], map: "direction")
+  @@index([info], map: "info")
+  @@index([pid], map: "room_attr")
+  @@index([time], map: "time")
+  @@index([type], map: "type")
+  @@map("is_room_info")
+}
+
+model Log {
+  id   Int    @id @default(autoincrement())
+  time Int
+  user Int
+  info String @db.VarChar(256)
+
+  @@index([time], map: "time")
+  @@index([user], map: "user")
+  @@map("is_log")
+}
+
+model Bor {
+  id        Int     @id @default(autoincrement())
+  source    Int
+  frame     Int
+  supplier  Int
+  time      Int
+  number    String  @db.VarChar(32)
+  total     Decimal @db.Decimal(16, 4)
+  actual    Decimal @db.Decimal(16, 4)
+  people    Int?    @default(0)
+  arrival   Int
+  logistics String? @db.Text
+  file      String? @db.Text
+  data      String? @default("") @db.VarChar(256)
+  more      String? @db.Text
+  examine   Boolean
+  state     Boolean
+  user      Int
+
+  @@index([arrival], map: "arrival")
+  @@index([examine], map: "examine")
+  @@index([frame], map: "frame")
+  @@index([people], map: "people")
+  @@index([source], map: "source")
+  @@index([state], map: "state")
+  @@index([supplier], map: "supplier")
+  @@index([time], map: "time")
+  @@index([user], map: "user")
+  @@map("is_bor")
+}
+
+model BorInfo {
+  id        Int      @id @default(autoincrement())
+  pid       Int
+  goods     Int
+  attr      String   @db.VarChar(64)
+  unit      String   @db.VarChar(32)
+  warehouse Int?     @default(0)
+  price     Decimal  @db.Decimal(12, 4)
+  nums      Decimal  @db.Decimal(12, 4)
+  discount  Decimal  @db.Decimal(5, 2)
+  dsc       Decimal  @db.Decimal(12, 4)
+  total     Decimal  @db.Decimal(12, 4)
+  tax       Decimal  @db.Decimal(5, 2)
+  tat       Decimal  @db.Decimal(12, 4)
+  tpt       Decimal  @db.Decimal(12, 4)
+  data      String   @db.VarChar(256)
+  handle    Decimal? @default(0.0000) @db.Decimal(12, 4)
+
+  @@index([goods], map: "goods")
+  @@index([pid], map: "pid")
+  @@map("is_bor_info")
+}
+
+model BuyInfo {
+  id        Int      @id @default(autoincrement())
+  pid       Int
+  source    Int
+  goods     Int
+  attr      String   @db.VarChar(64)
+  unit      String   @db.VarChar(32)
+  warehouse Int?     @default(0)
+  batch     String   @db.VarChar(32)
+  mfd       Int?     @default(0)
+  price     Decimal  @db.Decimal(12, 4)
+  nums      Decimal  @db.Decimal(12, 4)
+  serial    String   @db.Text
+  discount  Decimal  @db.Decimal(5, 2)
+  dsc       Decimal  @db.Decimal(12, 4)
+  total     Decimal  @db.Decimal(12, 4)
+  tax       Decimal  @db.Decimal(5, 2)
+  tat       Decimal  @db.Decimal(12, 4)
+  tpt       Decimal  @db.Decimal(12, 4)
+  data      String   @db.VarChar(256)
+  retreat   Decimal? @default(0.0000) @db.Decimal(12, 4)
+
+  @@index([goods], map: "goods")
+  @@index([pid], map: "pid")
+  @@index([source], map: "source")
+  @@map("is_buy_info")
+}
+
+model Sor {
+  id        Int     @id @default(autoincrement())
+  frame     Int
+  customer  Int
+  time      Int
+  number    String  @db.VarChar(32)
+  total     Decimal @db.Decimal(16, 4)
+  actual    Decimal @db.Decimal(16, 4)
+  people    Int?    @default(0)
+  arrival   Int
+  logistics String? @db.Text
+  file      String? @db.Text
+  data      String? @default("") @db.VarChar(256)
+  more      String? @db.Text
+  examine   Boolean
+  state     Boolean
+  user      Int
+
+  @@index([arrival], map: "arrival")
+  @@index([examine], map: "examine")
+  @@index([frame], map: "frame")
+  @@index([people], map: "people")
+  @@index([state], map: "state")
+  @@index([customer], map: "supplier")
+  @@index([time], map: "time")
+  @@index([user], map: "user")
+  @@map("is_sor")
+}
+
+model SorInfo {
+  id        Int      @id @default(autoincrement())
+  pid       Int
+  goods     Int
+  attr      String   @db.VarChar(64)
+  unit      String   @db.VarChar(32)
+  warehouse Int?     @default(0)
+  price     Decimal  @db.Decimal(12, 4)
+  nums      Decimal  @db.Decimal(12, 4)
+  discount  Decimal  @db.Decimal(5, 2)
+  dsc       Decimal  @db.Decimal(12, 4)
+  total     Decimal  @db.Decimal(12, 4)
+  tax       Decimal  @db.Decimal(5, 2)
+  tat       Decimal  @db.Decimal(12, 4)
+  tpt       Decimal  @db.Decimal(12, 4)
+  data      String   @db.VarChar(256)
+  handle    Decimal? @default(0.0000) @db.Decimal(12, 4)
+
+  @@index([goods], map: "goods")
+  @@index([pid], map: "pid")
+  @@map("is_sor_info")
+}
+
+model Record {
+  id     Int    @id @default(autoincrement())
+  type   String @db.VarChar(32)
+  source Int
+  time   Int
+  user   Int
+  info   String @db.VarChar(64)
+
+  @@index([source], map: "source")
+  @@index([time], map: "time")
+  @@index([type], map: "type")
+  @@index([user], map: "user")
+  @@map("is_record")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_account_info {
+  id        Int     @id @default(autoincrement())
+  pid       Int
+  type      String  @db.VarChar(32)
+  class     Int
+  time      Int
+  direction Boolean
+  money     Decimal @db.Decimal(16, 4)
+
+  @@index([class], map: "class")
+  @@index([direction], map: "direction")
+  @@index([pid], map: "pid")
+  @@index([time], map: "time")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_allot {
+  id      Int     @id @default(autoincrement())
+  frame   Int
+  time    Int
+  number  String  @db.VarChar(32)
+  total   Decimal @db.Decimal(16, 4)
+  people  Int?    @default(0)
+  file    String? @db.Text
+  data    String? @default("") @db.VarChar(256)
+  more    String? @db.Text
+  examine Boolean
+  user    Int
+
+  @@index([examine], map: "examine")
+  @@index([frame], map: "frame")
+  @@index([people], map: "people")
+  @@index([time], map: "time")
+  @@index([user], map: "user")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_allot_info {
+  id      Int     @id @default(autoincrement())
+  pid     Int
+  account Int
+  tat     Int
+  money   Decimal @db.Decimal(12, 4)
+  settle  String? @default("") @db.VarChar(256)
+  data    String? @default("") @db.VarChar(256)
+
+  @@index([account], map: "account")
+  @@index([pid], map: "pid")
+  @@index([tat], map: "tat")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_attr {
+  id   Int     @id @default(autoincrement())
+  pid  Int
+  name String  @db.VarChar(64)
+  buy  Decimal @db.Decimal(12, 4)
+  sell Decimal @db.Decimal(12, 4)
+  code String  @db.VarChar(64)
+
+  @@index([code], map: "code")
+  @@index([pid], map: "pid")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_batch_info {
+  id        Int     @id @default(autoincrement())
+  pid       Int
+  type      String  @db.VarChar(32)
+  class     Int
+  info      Int
+  direction Boolean
+  nums      Decimal @db.Decimal(12, 4)
+
+  @@index([direction], map: "direction")
+  @@index([pid], map: "pid")
+  @@index([type], map: "type")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_bill {
+  id       Int     @id @default(autoincrement())
+  frame    Int
+  customer Int
+  supplier Int
+  time     Int
+  number   String  @db.VarChar(32)
+  type     Boolean
+  pmy      Decimal @db.Decimal(16, 4)
+  smp      Decimal @db.Decimal(16, 4)
+  people   Int?    @default(0)
+  file     String? @db.Text
+  data     String? @default("") @db.VarChar(256)
+  more     String? @db.Text
+  examine  Boolean
+  user     Int
+
+  @@index([customer], map: "customer")
+  @@index([examine], map: "examine")
+  @@index([frame], map: "frame")
+  @@index([people], map: "people")
+  @@index([supplier], map: "supplier")
+  @@index([time], map: "time")
+  @@index([type], map: "type")
+  @@index([user], map: "user")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_bill_info {
+  id     Int     @id @default(autoincrement())
+  pid    Int
+  source Int
+  bill   String  @db.VarChar(32)
+  mold   String  @db.VarChar(32)
+  money  Decimal @db.Decimal(12, 4)
+
+  @@index([bill], map: "bill")
+  @@index([mold], map: "mold")
+  @@index([pid], map: "pid")
+  @@index([source], map: "source")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_bre_bill {
+  id     Int     @id @default(autoincrement())
+  pid    Int
+  type   String  @db.VarChar(32)
+  source Int
+  time   Int
+  money  Decimal @db.Decimal(16, 4)
+
+  @@index([pid], map: "pid_account_user")
+  @@index([source], map: "source")
+  @@index([time], map: "time")
+  @@index([type], map: "type")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_bre_info {
+  id        Int     @id @default(autoincrement())
+  pid       Int
+  source    Int
+  goods     Int
+  attr      String  @db.VarChar(64)
+  unit      String  @db.VarChar(32)
+  warehouse Int?    @default(0)
+  batch     String  @db.VarChar(32)
+  mfd       Int?    @default(0)
+  price     Decimal @db.Decimal(12, 4)
+  nums      Decimal @db.Decimal(12, 4)
+  serial    String  @db.Text
+  discount  Decimal @db.Decimal(5, 2)
+  dsc       Decimal @db.Decimal(12, 4)
+  total     Decimal @db.Decimal(12, 4)
+  tax       Decimal @db.Decimal(5, 2)
+  tat       Decimal @db.Decimal(12, 4)
+  tpt       Decimal @db.Decimal(12, 4)
+  data      String  @db.VarChar(256)
+
+  @@index([goods], map: "goods")
+  @@index([pid], map: "pid")
+  @@index([source], map: "source")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_buy_bill {
+  id     Int     @id @default(autoincrement())
+  pid    Int
+  type   String  @db.VarChar(32)
+  source Int
+  time   Int
+  money  Decimal @db.Decimal(16, 4)
+
+  @@index([pid], map: "pid_account_user")
+  @@index([source], map: "source")
+  @@index([time], map: "time")
+  @@index([type], map: "type")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_cost_info {
+  id    Int     @id @default(autoincrement())
+  pid   Int
+  oce   Int
+  time  Int
+  money Decimal @db.Decimal(16, 4)
+
+  @@index([oce], map: "oce")
+  @@index([pid], map: "pid")
+  @@index([time], map: "time")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_extry {
+  id        Int     @id @default(autoincrement())
+  customer  Int
+  frame     Int
+  time      Int
+  number    String  @db.VarChar(32)
+  type      Boolean
+  total     Decimal @db.Decimal(16, 4)
+  cost      Decimal @db.Decimal(16, 4)
+  people    Int?    @default(0)
+  logistics String? @db.Text
+  file      String? @db.Text
+  data      String? @default("") @db.VarChar(265)
+  more      String? @db.Text
+  examine   Boolean
+  cse       Boolean
+  check     Boolean
+  user      Int
+
+  @@index([check], map: "check")
+  @@index([cse], map: "cse")
+  @@index([customer], map: "customer")
+  @@index([examine], map: "examine")
+  @@index([frame], map: "frame")
+  @@index([people], map: "people")
+  @@index([time], map: "time")
+  @@index([type], map: "type")
+  @@index([user], map: "user")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_extry_info {
+  id        Int     @id @default(autoincrement())
+  pid       Int
+  goods     Int
+  attr      String  @db.VarChar(64)
+  unit      String  @db.VarChar(32)
+  warehouse Int?    @default(0)
+  batch     String  @db.VarChar(32)
+  mfd       Int?    @default(0)
+  price     Decimal @db.Decimal(12, 4)
+  nums      Decimal @db.Decimal(12, 4)
+  serial    String  @db.Text
+  total     Decimal @db.Decimal(12, 4)
+  data      String  @db.VarChar(256)
+
+  @@index([goods], map: "goods")
+  @@index([pid], map: "pid")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_ice_bill {
+  id     Int     @id @default(autoincrement())
+  pid    Int
+  type   String  @db.VarChar(32)
+  source Int
+  time   Int
+  money  Decimal @db.Decimal(16, 4)
+
+  @@index([pid], map: "pid_account_user")
+  @@index([source], map: "source")
+  @@index([time], map: "time")
+  @@index([type], map: "type")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_ice_info {
+  id    Int     @id @default(autoincrement())
+  pid   Int
+  iet   Int
+  money Decimal @db.Decimal(12, 4)
+  data  String  @db.VarChar(256)
+
+  @@index([iet], map: "iet")
+  @@index([pid], map: "pid")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_imy_bill {
+  id     Int     @id @default(autoincrement())
+  pid    Int
+  type   String  @db.VarChar(32)
+  source Int
+  time   Int
+  money  Decimal @db.Decimal(16, 4)
+
+  @@index([pid], map: "pid_account_user")
+  @@index([source], map: "source")
+  @@index([time], map: "time")
+  @@index([type], map: "type")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_imy_info {
+  id      Int     @id @default(autoincrement())
+  pid     Int
+  account Int?    @default(0)
+  money   Decimal @db.Decimal(12, 4)
+  settle  String  @db.VarChar(256)
+  data    String  @db.VarChar(256)
+
+  @@index([account], map: "account")
+  @@index([pid], map: "pid")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_invoice {
+  id     Int     @id @default(autoincrement())
+  type   String  @db.VarChar(32)
+  class  Int
+  time   Int
+  number String  @db.VarChar(64)
+  title  String  @db.VarChar(64)
+  money  Decimal @db.Decimal(16, 4)
+  file   String  @db.Text
+  data   String  @db.VarChar(256)
+
+  @@index([class], map: "class")
+  @@index([time], map: "time")
+  @@index([type], map: "type")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_oce {
+  id       Int     @id @default(autoincrement())
+  frame    Int
+  supplier Int
+  time     Int
+  number   String  @db.VarChar(32)
+  total    Decimal @db.Decimal(16, 4)
+  actual   Decimal @db.Decimal(16, 4)
+  money    Decimal @db.Decimal(16, 4)
+  account  Int
+  people   Int?    @default(0)
+  file     String? @db.Text
+  data     String? @default("") @db.VarChar(256)
+  more     String? @db.Text
+  examine  Boolean
+  nucleus  Boolean
+  user     Int
+
+  @@index([account], map: "account")
+  @@index([examine], map: "examine")
+  @@index([frame], map: "frame")
+  @@index([nucleus], map: "nucleus")
+  @@index([people], map: "people")
+  @@index([supplier], map: "supplier")
+  @@index([time], map: "time")
+  @@index([user], map: "user")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_oce_bill {
+  id     Int     @id @default(autoincrement())
+  pid    Int
+  type   String  @db.VarChar(32)
+  source Int
+  time   Int
+  money  Decimal @db.Decimal(16, 4)
+
+  @@index([pid], map: "pid_account_user")
+  @@index([source], map: "source")
+  @@index([time], map: "time")
+  @@index([type], map: "type")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_oce_info {
+  id     Int     @id @default(autoincrement())
+  pid    Int
+  source Int
+  iet    Int
+  money  Decimal @db.Decimal(12, 4)
+  data   String  @db.VarChar(256)
+
+  @@index([iet], map: "iet")
+  @@index([pid], map: "pid")
+  @@index([source], map: "source")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_omy_bill {
+  id     Int     @id @default(autoincrement())
+  pid    Int
+  type   String  @db.VarChar(32)
+  source Int
+  time   Int
+  money  Decimal @db.Decimal(16, 4)
+
+  @@index([pid], map: "pid_account_user")
+  @@index([source], map: "source")
+  @@index([time], map: "time")
+  @@index([type], map: "type")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_omy_info {
+  id      Int     @id @default(autoincrement())
+  pid     Int
+  account Int?    @default(0)
+  money   Decimal @db.Decimal(12, 4)
+  settle  String  @db.VarChar(256)
+  data    String  @db.VarChar(256)
+
+  @@index([account], map: "account")
+  @@index([pid], map: "pid")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_sell_bill {
+  id     Int     @id @default(autoincrement())
+  pid    Int
+  type   String  @db.VarChar(32)
+  source Int
+  time   Int
+  money  Decimal @db.Decimal(16, 4)
+
+  @@index([pid], map: "pid_account_user")
+  @@index([source], map: "source")
+  @@index([time], map: "time")
+  @@index([type], map: "type")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_sell_info {
+  id        Int      @id @default(autoincrement())
+  pid       Int
+  source    Int
+  goods     Int
+  attr      String   @db.VarChar(64)
+  unit      String   @db.VarChar(32)
+  warehouse Int?     @default(0)
+  batch     String   @db.VarChar(32)
+  mfd       Int?     @default(0)
+  price     Decimal  @db.Decimal(12, 4)
+  nums      Decimal  @db.Decimal(12, 4)
+  serial    String   @db.Text
+  discount  Decimal  @db.Decimal(5, 2)
+  dsc       Decimal  @db.Decimal(12, 4)
+  total     Decimal  @db.Decimal(12, 4)
+  tax       Decimal  @db.Decimal(5, 2)
+  tat       Decimal  @db.Decimal(12, 4)
+  tpt       Decimal  @db.Decimal(12, 4)
+  data      String   @db.VarChar(256)
+  retreat   Decimal? @default(0.0000) @db.Decimal(12, 4)
+
+  @@index([goods], map: "goods")
+  @@index([pid], map: "pid")
+  @@index([source], map: "source")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_serial {
+  id        Int     @id @default(autoincrement())
+  room      Int
+  warehouse Int
+  batch     Int?    @default(0)
+  goods     Int
+  number    String  @db.VarChar(64)
+  state     Boolean
+
+  @@index([batch], map: "batch")
+  @@index([goods], map: "goods")
+  @@index([number], map: "number")
+  @@index([room], map: "room_attr")
+  @@index([state], map: "state")
+  @@index([warehouse], map: "warehouse")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_serial_info {
+  id    Int    @id @default(autoincrement())
+  pid   Int
+  type  String @db.VarChar(32)
+  class Int
+  info  Int
+
+  @@index([class], map: "class")
+  @@index([info], map: "info")
+  @@index([pid], map: "pid")
+  @@index([type], map: "type")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_serve {
+  id    Int     @id @default(autoincrement())
+  goods Int
+  attr  String  @db.VarChar(64)
+  nums  Decimal @db.Decimal(12, 4)
+
+  @@index([goods, attr], map: "goods_attr")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_serve_info {
+  id    Int     @id @default(autoincrement())
+  pid   Int
+  type  String  @db.VarChar(32)
+  class Int
+  info  Int
+  time  Int
+  price Decimal @db.Decimal(12, 4)
+  nums  Decimal @db.Decimal(12, 4)
+
+  @@index([class], map: "class")
+  @@index([info], map: "info")
+  @@index([pid], map: "pid")
+  @@index([time], map: "time")
+  @@index([type, info], map: "type_info")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_sre_bill {
+  id     Int     @id @default(autoincrement())
+  pid    Int
+  type   String  @db.VarChar(32)
+  source Int
+  time   Int
+  money  Decimal @db.Decimal(16, 4)
+
+  @@index([pid], map: "pid_account_user")
+  @@index([source], map: "source")
+  @@index([time], map: "time")
+  @@index([type], map: "type")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_sre_info {
+  id        Int     @id @default(autoincrement())
+  pid       Int
+  source    Int
+  goods     Int
+  attr      String  @db.VarChar(64)
+  unit      String  @db.VarChar(32)
+  warehouse Int?    @default(0)
+  batch     String  @db.VarChar(32)
+  mfd       Int?    @default(0)
+  price     Decimal @db.Decimal(12, 4)
+  nums      Decimal @db.Decimal(12, 4)
+  serial    String  @db.Text
+  discount  Decimal @db.Decimal(5, 2)
+  dsc       Decimal @db.Decimal(12, 4)
+  total     Decimal @db.Decimal(12, 4)
+  tax       Decimal @db.Decimal(5, 2)
+  tat       Decimal @db.Decimal(12, 4)
+  tpt       Decimal @db.Decimal(12, 4)
+  data      String  @db.VarChar(256)
+
+  @@index([goods], map: "goods")
+  @@index([pid], map: "pid")
+  @@index([source], map: "source")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_swap {
+  id        Int      @id @default(autoincrement())
+  frame     Int
+  time      Int
+  number    String   @db.VarChar(32)
+  total     Decimal  @db.Decimal(16, 4)
+  cost      Decimal  @db.Decimal(16, 4)
+  logistics String   @db.Text
+  people    Int?     @default(0)
+  file      String   @db.Text
+  data      String   @db.VarChar(265)
+  more      String   @db.Text
+  examine   Boolean? @default(false)
+  cse       Boolean?
+  user      Int
+
+  @@index([cse], map: "cse")
+  @@index([examine], map: "examine")
+  @@index([frame], map: "frame")
+  @@index([people], map: "people")
+  @@index([time], map: "time")
+  @@index([user], map: "user")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model is_swap_info {
+  id         Int     @id @default(autoincrement())
+  pid        Int
+  goods      Int
+  attr       String  @db.VarChar(64)
+  unit       String  @db.VarChar(32)
+  warehouse  Int
+  storehouse Int
+  batch      String  @db.VarChar(32)
+  mfd        Int?    @default(0)
+  price      Decimal @db.Decimal(12, 4)
+  nums       Decimal @db.Decimal(12, 4)
+  serial     String  @db.Text
+  total      Decimal @db.Decimal(12, 4)
+  data       String  @db.VarChar(256)
+
+  @@index([goods], map: "goods")
+  @@index([pid], map: "pid")
+  @@index([storehouse], map: "storehouse")
+  @@index([warehouse], map: "warehouse")
+}

@@ -461,6 +461,9 @@
       >
         <template slot-scope="scope">
           <el-button-group>
+            <el-button @click="imageShow(scope.row.id)" size="mini" type="danger" plain
+              >视图</el-button
+            >
             <el-button @click="billShow(scope.row.id)" size="mini"
               >详情</el-button
             >
@@ -518,6 +521,19 @@
       <transition name="el-fade-in">
         <template v-if="bill.dialog">
           <Buy :source="bill.source" @destroy="bill.dialog = false"></Buy>
+        </template>
+      </transition>
+    </el-dialog>
+    <el-dialog
+      class="billDialog"
+      :visible.sync="image.dialog"
+      title="单据图文详情"
+      :fullscreen="true"
+      @close="imageDestroy"
+    >
+      <transition name="el-fade-in">
+        <template v-if="image.dialog">
+          <BuyImage :source="image.source" @destroy="image.dialog = false"></BuyImage>
         </template>
       </transition>
     </el-dialog>
@@ -602,6 +618,7 @@
 </template>
 <script>
 import Buy from "@/views/purchase/Buy";
+import BuyImage from "@/views/purchase/BuyImage";
 import Bor from "@/views/purchase/Bor";
 import Bre from "@/views/purchase/Bre";
 import NodList from "@/components/lib/NodList";
@@ -611,6 +628,7 @@ export default {
   name: "BuyForm",
   components: {
     Buy,
+    BuyImage,
     Bor,
     Bre,
     NodList,
@@ -650,6 +668,10 @@ export default {
         ],
       },
       bill: {
+        dialog: false,
+        source: null,
+      },
+      image: {
         dialog: false,
         source: null,
       },
@@ -714,6 +736,15 @@ export default {
     billShow(id) {
       this.bill.source = id;
       this.bill.dialog = true;
+    },
+    //图文详情
+    imageShow(id) {
+      this.image.source = id;
+      this.image.dialog = true;
+    },
+    //图文关闭
+    imageDestroy() {
+      this.record(0); //获取数据
     },
     //单据关闭
     billDestroy() {

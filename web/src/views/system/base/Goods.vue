@@ -17,9 +17,7 @@
 					</el-form-item>
 					<el-form-item>
 						<el-select v-model="searchFrom.brand" placeholder="请选择商品品牌" clearable>
-							<template v-for="brand in store.sys.brand">
-								<el-option :label="brand" :value="brand"></el-option>
-							</template>
+							<el-option v-for="brand in store.sys.brand" :key="brand" :label="brand" :value="brand"></el-option>
 						  </el-select>
 					</el-form-item>
 					<el-form-item>
@@ -51,12 +49,45 @@
 				<template v-if="$lib.getUserRoot(store.root,'base','batch')">
 					<el-button @click="batch.dialog=true" >批量</el-button>
 				</template>
+				<el-button @click="toggleView">{{ viewMode ? '列表' : '视图' }}</el-button>
+				<el-button @click="togglePics">{{ picMode ? '隐藏图片' : '图片' }}</el-button>
 				<el-button @click="reload" >刷新</el-button>
 			</el-button-group>
 		</div>
 		<el-divider></el-divider>
-		<el-table :data="tableData" height="calc(100% - 90px)" @selection-change="selectionChange" border v-madeTable>
+		<div v-if="viewMode" class="viewWrap">
+			<div class="goodsGrid">
+				<div v-for="row in tableData" :key="row.id" class="goodsCard" @click="set(row.id)">
+					<div class="cardImg">
+						<el-image v-if="getImgUrl(row)" :src="getImgUrl(row)" fit="contain">
+							<div slot="error" class="imgErrorMini">
+								<i class="el-icon-picture-outline"></i>
+							</div>
+						</el-image>
+						<div v-else class="imgErrorMini">
+							<i class="el-icon-picture-outline"></i>
+						</div>
+					</div>
+					<div class="cardNo">{{ row.number }}</div>
+				</div>
+			</div>
+		</div>
+		<el-table v-else :data="tableData" height="calc(100% - 90px)" @selection-change="selectionChange" border v-madeTable>
 			<el-table-column type="selection" align="center" width="39px" fixed="left"></el-table-column>
+			<el-table-column v-if="picMode" label="图片" align="center" width="100px" fixed="left">
+				<template slot-scope="scope">
+					<div class="tableImg">
+						<el-image v-if="getImgUrl(scope.row)" :src="getImgUrl(scope.row)" fit="contain">
+							<div slot="error" class="imgErrorMini">
+								<i class="el-icon-picture-outline"></i>
+							</div>
+						</el-image>
+						<div v-else class="imgErrorMini">
+							<i class="el-icon-picture-outline"></i>
+						</div>
+					</div>
+				</template>
+			</el-table-column>
 			<el-table-column prop="name" label="商品名称" align="center" width="220px"></el-table-column>
 			<el-table-column prop="number" label="商品编号" align="center" width="160px"></el-table-column>
 			<el-table-column prop="spec" label="规格型号" align="center" width="160px"></el-table-column>
@@ -106,9 +137,7 @@
 									    <span @click="switchPage('sys')">商品品牌</span>
 									</template>
 									<el-select v-model="form.brand" placeholder="请选择商品品牌" clearable filterable>
-										<template v-for="brand in store.sys.brand">
-											<el-option :label="brand" :value="brand"></el-option>
-										</template>
+										<el-option v-for="brand in store.sys.brand" :key="brand" :label="brand" :value="brand"></el-option>
 									</el-select>
 								</el-form-item>
 								<el-form-item label="商品单位" prop="unit">
@@ -116,9 +145,7 @@
 									    <span @click="switchPage('sys')">商品单位</span>
 									</template>
 									<el-select v-model="form.unit" placeholder="请选择商品单位" @change="unitChange" clearable>
-										<template v-for="unit in store.sys.unit">
-											<el-option :label="unit" :value="unit"></el-option>
-										</template>
+										<el-option v-for="unit in store.sys.unit" :key="unit" :label="unit" :value="unit"></el-option>
 										<el-option label="多单位" value="-1"></el-option>
 									 </el-select>
 								</el-form-item>
@@ -155,36 +182,34 @@
 									<el-table-column prop="name" label="属性名称" width="90px"></el-table-column>
 									<el-table-column label="属性内容" min-width="240px">
 										<template slot-scope="scope">
-											<template v-for="(row,index) in scope.row.info">
-												<el-checkbox v-model="dialog.attrChecked['n'+$lib.charUnique(row.name)].checked" class="attrNode" @change="AttrChange">{{row.name}}</el-checkbox>
-											</template>
+											<el-checkbox v-for="row in scope.row.info" :key="row.name" v-model="dialog.attrChecked['n'+$lib.charUnique(row.name)].checked" class="attrNode" @change="AttrChange">{{row.name}}</el-checkbox>
 										</template>
 									</el-table-column>
 								</el-table>
 								<el-table :data="form.attr" size="mini" class="gridTable" border>
 									<el-table-column prop="name" label="属性名称" align="center" min-width="100px"></el-table-column>
 									<el-table-column align="center" width="100px">
-										<template slot="header" slot-scope="scope">
+										<template slot="header">
 											<span>采购价格 <i class="el-icon-sort" @click="attrFill('buy')"></i></span>
 										</template>
 										<template slot-scope="scope">
-											<input type="text" v-model="scope.row.buy" placeholder="采购价格"></input>
+											<input type="text" v-model="scope.row.buy" placeholder="采购价格" />
 										</template>
 									</el-table-column>
 									<el-table-column align="center" width="100px">
-										<template slot="header" slot-scope="scope">
+										<template slot="header">
 											<span>销售价格 <i class="el-icon-sort" @click="attrFill('sell')"></i></span>
 										</template>
 										<template slot-scope="scope">
-											<input type="text" v-model="scope.row.sell" placeholder="销售价格"></input>
+											<input type="text" v-model="scope.row.sell" placeholder="销售价格" />
 										</template>
 									</el-table-column>
 									<el-table-column align="center" width="120px">
-										<template slot="header" slot-scope="scope">
+										<template slot="header">
 											<span>条形码 <i class="el-icon-sort" @click="attrFill('code')"></i></span>
 										</template>
 										<template slot-scope="scope">
-											<input type="text" v-model="scope.row.code" placeholder="条形码"></input>
+											<input type="text" v-model="scope.row.code" placeholder="条形码" />
 										</template>
 									</el-table-column>
 								</el-table>
@@ -196,18 +221,18 @@
 											<el-table :data="form.units" size="mini" class="gridTable" border>
 												<el-table-column label="单位名称" align="center" min-width="120px">
 													<template slot-scope="scope">
-														<input type="text" v-model="scope.row.name" @input="unitNameChange(scope.$index)" placeholder="单位名称"></input>
+														<input type="text" v-model="scope.row.name" @input="unitNameChange(scope.$index)" placeholder="单位名称" />
 													</template>
 												</el-table-column>
 												<el-table-column label="单位数量" align="center" width="120px">
 													<template slot-scope="scope">
-														<input type="text" v-model="scope.row.nums" placeholder="单位数量"></input>
+														<input type="text" v-model="scope.row.nums" placeholder="单位数量" />
 													</template>
 												</el-table-column>
 												<el-table-column label="关联单位" align="center" width="120px">
 													<template slot-scope="scope">
 														<template v-if="scope.$index==0">
-															<input type="text" v-model="scope.row.source" placeholder="基本单位"></input>
+															<input type="text" v-model="scope.row.source" placeholder="基本单位" />
 														</template>
 														<template v-else>
 															<span>{{scope.row.source}}</span>
@@ -216,11 +241,11 @@
 												</el-table-column>
 												<el-table-column label="折扣率 (%)" align="center" width="120px">
 													<template slot-scope="scope">
-														<input type="text" v-model="scope.row.discount" placeholder="折扣率"></input>
+														<input type="text" v-model="scope.row.discount" placeholder="折扣率" />
 													</template>
 												</el-table-column>
 												<el-table-column align="center" width="120px">
-													<template slot="header" slot-scope="scope">
+													<template slot="header">
 														<span>相关操作</span> <i class="el-icon-circle-plus-outline" @click="addUnit"></i>
 													</template>
 													<template slot-scope="scope">
@@ -235,24 +260,22 @@
 											<el-table-column label="客户等级" align="center" width="160px">
 												<template slot-scope="scope">
 													<select v-model="scope.row.grade">
-														<template v-for="gride in store.sys.crGrade">
-															<option :value="gride">{{gride}}</option>
-														</template>
+														<option v-for="gride in store.sys.crGrade" :key="gride" :value="gride">{{gride}}</option>
 													</select>
 												</template>
 											</el-table-column>
 											<el-table-column label="折扣率 (%)" align="center" width="160px">
 												<template slot-scope="scope">
-													<input type="text" v-model="scope.row.discount" placeholder="折扣策略"></input>
+													<input type="text" v-model="scope.row.discount" placeholder="折扣策略" />
 												</template>
 											</el-table-column>
 											<el-table-column label="备注信息" align="center" min-width="120px">
 												<template slot-scope="scope">
-													<input type="text" v-model="scope.row.data" placeholder="备注信息"></input>
+													<input type="text" v-model="scope.row.data" placeholder="备注信息" />
 												</template>
 											</el-table-column>
 											<el-table-column align="center" width="120px">
-												<template slot="header" slot-scope="scope">
+												<template slot="header">
 													<span>相关操作</span> <i class="el-icon-circle-plus-outline" @click="addStrategy"></i>
 												</template>
 												<template slot-scope="scope">
@@ -400,6 +423,8 @@
 					sizes: [30, 60, 90, 150, 300],
 					count: 5
 				},
+				picMode: false,
+				viewMode: false,
 				dialog:{
 					show:false,
 					active:'base',
@@ -540,6 +565,28 @@
 			}
 		},
 		methods: {
+			toggleView(){
+				this.viewMode=!this.viewMode;
+				this.viewMode && (this.picMode=false);
+			},
+			togglePics() {
+				this.picMode = !this.picMode;
+			},
+			getImgUrl(row) {
+				const imgs = row ? row.imgs : null;
+				let val = "";
+				if (Array.isArray(imgs) && imgs.length > 0) {
+					const first = imgs[0];
+					val = typeof first == "string" ? first : first && first.url ? first.url : "";
+				} else if (imgs && typeof imgs == "object") {
+					val = imgs.url || "";
+				} else if (typeof imgs == "string") {
+					val = imgs;
+				}
+				if (this.$lib.validate("empty", val)) return "";
+				if (/^https?:\/\//.test(val)) return val;
+				return (this.store.base && this.store.base.cdnSite ? this.store.base.cdnSite : "") + val;
+			},
 			getBase(){
 				this.$axios.post("attribute/select").then(result => {
 					if (result.state == "success") {
@@ -1051,6 +1098,72 @@
 	.layout {
 		display: flex;
 		justify-content: space-between;
+	}
+	.viewWrap{
+		height: calc(100% - 90px);
+		overflow: auto;
+	}
+	.goodsGrid{
+		display: grid;
+		grid-template-columns: repeat(8, 1fr);
+		gap: 10px;
+		padding: 10px 0;
+	}
+	.goodsCard{
+		border: 1px solid #ebeef5;
+		border-radius: 6px;
+		background: #fff;
+		padding: 8px;
+		cursor: pointer;
+		overflow: hidden;
+	}
+	.cardImg{
+		width: 100%;
+		height: 120px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+	}
+	.cardImg >>> .el-image{
+		width: 100%;
+		height: 100%;
+	}
+	.cardImg >>> img{
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+	}
+	.cardNo{
+		margin-top: 6px;
+		font-size: 12px;
+		color: #606266;
+		text-align: center;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.tableImg{
+		width: 70px;
+		height: 90px;
+		margin: 0 auto;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.tableImg >>> .el-image{
+		width: 70px;
+		height: 90px;
+	}
+	.imgErrorMini{
+		width: 70px;
+		height: 90px;
+		border: 1px dashed #dcdfe6;
+		border-radius: 4px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #909399;
 	}
 	.formItemInitial >>> .el-form-item{
 		display: initial;

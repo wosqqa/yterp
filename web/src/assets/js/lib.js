@@ -155,6 +155,7 @@ const lib = {
     },
     //等级折扣
     gradeDiscount(grade, strategy) {
+        if (!strategy || !Array.isArray(strategy)) return 0;
         let find = strategy.find((item) => item.grade == grade);
         return find ? find.discount : 0;
     },

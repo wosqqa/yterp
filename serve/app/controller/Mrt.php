@@ -25,12 +25,12 @@ class Mrt extends Acl{
             $tab=['sell','sre'];
             foreach ($tab as $t) {
                 if(in_array($t,$input['mold'])){
-                    $union[]=Db::name($t)->where($sql)->fieldRaw('"'.$t.'" as mold,id')->buildSql();
+                    $union[]=Db::name($t)->where($sql)->fieldRaw('"'.$t.'" as mold,id,time as t')->buildSql();
                 }
             }
             $union=implode(' UNION ALL ',$union);
             $count=DB::query('SELECT COUNT(*) as count FROM ('.$union.') as nodcloud')[0]["count"];
-            $record=DB::query('SELECT * FROM ('.$union.') as nodcloud LIMIT '.pageCalc($input['page'],$input['limit'],'str'));
+            $record=DB::query('SELECT * FROM ('.$union.') as nodcloud ORDER BY t DESC, id DESC LIMIT '.pageCalc($input['page'],$input['limit'],'str'));
             $bill=['class'=>[],'summary'=>[],'info'=>[],''=>[]];
             foreach ($tab as $t) {
                 if(in_array($t,$input['mold'])){
@@ -44,7 +44,7 @@ class Mrt extends Acl{
                     }
                 }
             }
-            arraySort($bill['class'],'t',SORT_ASC);
+            arraySort($bill['class'],'t',SORT_DESC);
             $data=[];
             //匹配数据
             foreach ($bill['class'] as $classVo) {
@@ -134,11 +134,11 @@ class Mrt extends Acl{
             $tab=['sell','sre'];
             foreach ($tab as $t) {
                 if(in_array($t,$input['mold'])){
-                    $union[]=Db::name($t)->where($sql)->fieldRaw('"'.$t.'" as mold,id')->buildSql();
+                    $union[]=Db::name($t)->where($sql)->fieldRaw('"'.$t.'" as mold,id,time as t')->buildSql();
                 }
             }
             $union=implode(' UNION ALL ',$union);
-            $record=DB::query('SELECT * FROM ('.$union.') as nodcloud');
+            $record=DB::query('SELECT * FROM ('.$union.') as nodcloud ORDER BY t DESC, id DESC');
             $bill=['class'=>[],'summary'=>[],'info'=>[],''=>[]];
             foreach ($tab as $t) {
                 if(in_array($t,$input['mold'])){
@@ -152,7 +152,7 @@ class Mrt extends Acl{
                     }
                 }
             }
-            arraySort($bill['class'],'t',SORT_ASC);
+            arraySort($bill['class'],'t',SORT_DESC);
             $data=[];
             //匹配数据
             foreach ($bill['class'] as $classVo) {

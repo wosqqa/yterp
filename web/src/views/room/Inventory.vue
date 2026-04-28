@@ -17,9 +17,7 @@
 					</el-form-item>
 					<el-form-item>
 						<el-select v-model="searchFrom.brand" placeholder="请选择商品品牌" clearable>
-							<template v-for="brand in store.sys.brand">
-								<el-option :label="brand" :value="brand"></el-option>
-							</template>
+							<el-option v-for="brand in store.sys.brand" :key="brand" :label="brand" :value="brand"></el-option>
 						  </el-select>
 					</el-form-item>
 					<el-form-item>
@@ -27,9 +25,7 @@
 					</el-form-item>
 					<el-form-item>						
 						<el-select v-model="searchFrom.warehouse" placeholder="请选择仓库信息" multiple collapse-tags>
-							<template v-for="warehouse in store.warehouse">
-								<el-option :label="warehouse.name" :value="warehouse.id"></el-option>
-							</template>
+							<el-option v-for="warehouse in store.warehouse" :key="warehouse.id" :label="warehouse.name" :value="warehouse.id"></el-option>
 						</el-select>
 					</el-form-item>
 					<el-form-item>
@@ -42,6 +38,7 @@
 			</el-popover>
 			<el-button-group>
 				<el-button @click="build">生成盘点单</el-button>
+				<el-button @click="togglePics">{{ picMode ? '隐藏图片' : '图片' }}</el-button>
 				<el-button @click="exports">导出</el-button>
 				<el-button @click="reload">刷新</el-button>
 			</el-button-group>
@@ -58,9 +55,23 @@
 		>
 			<el-table-column prop="name" label="商品名称" align="left" width="220px" fixed="left"></el-table-column>
 			<el-table-column prop="summary" label="库存数量" align="center" width="120px"></el-table-column>
+			<el-table-column v-if="picMode" label="图片" align="center" width="100px">
+				<template slot-scope="scope">
+					<div class="tableImg">
+						<el-image v-if="getImgUrl(scope.row)" :src="getImgUrl(scope.row)" fit="contain">
+							<div slot="error" class="imgErrorMini">
+								<i class="el-icon-picture-outline"></i>
+							</div>
+						</el-image>
+						<div v-else class="imgErrorMini">
+							<i class="el-icon-picture-outline"></i>
+						</div>
+					</div>
+				</template>
+			</el-table-column>
 			<el-table-column label="仓库" align="center">
-				<template v-for="column in tableColumn"  >
-					<el-table-column :label="column.name" align="center" :key="column.key">
+				<template v-for="column in tableColumn">
+					<el-table-column :key="column.key" :label="column.name" align="center">
 						<el-table-column :prop="'record.'+(column.key)+'.basisAlias'" label="库存数" align="center" width="90px"></el-table-column>
 						<el-table-column label="盘点数" align="center" :width="columnWidth">
 							<template slot-scope="scope">
@@ -70,16 +81,14 @@
 								<template v-else>
 									<template v-if="Array.isArray(scope.row.record[column.key].enter)">
 										<div class="unitGroup">
-											<template v-for="item in scope.row.record[column.key].enter">
-												<div class="unitItem">
-													<input type="text" v-model="item.nums" @input="unitHandle(false)"></input>
-													<span @click="unitNameClick">{{item.name}}</span>
-												</div>
-											</template>
+											<div v-for="item in scope.row.record[column.key].enter" :key="item.id || item.key || item.name" class="unitItem">
+												<input type="text" v-model="item.nums" @input="unitHandle(false)" />
+												<span @click="unitNameClick">{{item.name}}</span>
+											</div>
 										</div>
 									</template>
 									<template v-else>
-										<input type="text" v-model="scope.row.record[column.key].enter" @input="unitHandle(false)"></input>
+										<input type="text" v-model="scope.row.record[column.key].enter" @input="unitHandle(false)" />
 									</template>
 								</template>
 							</template>
@@ -147,6 +156,7 @@
 				},
 				tableData: [],
 				tableColumn:[],
+				picMode: false,
 				page: {
 					current: 1,
 					total: 0,
@@ -173,6 +183,26 @@
 			}
 		},
 		methods: {
+			togglePics() {
+				this.picMode = !this.picMode;
+			},
+			getImgUrl(row) {
+				const goods = row && row.hasOwnProperty('pid') ? this.tableData.find(item => item.id == row.pid) : row;
+				const source = goods && goods.goodsData ? goods.goodsData : goods;
+				const imgs = source ? source.imgs : null;
+				let val = "";
+				if (Array.isArray(imgs) && imgs.length > 0) {
+					const first = imgs[0];
+					val = typeof first == "string" ? first : first && first.url ? first.url : "";
+				} else if (imgs && typeof imgs == "object") {
+					val = imgs.url || "";
+				} else if (typeof imgs == "string") {
+					val = imgs;
+				}
+				if (this.$lib.validate("empty", val)) return "";
+				if (/^https?:\/\//.test(val)) return val;
+				return (this.store.base && this.store.base.cdnSite ? this.store.base.cdnSite : "") + val;
+			},
 			//获取数据
 			record(page) {
 				page==0||(this.page.current=page);
@@ -445,5 +475,26 @@
 		line-height: 40px;
 		width: 25px;
 		text-align: center;
+	}
+	.tableImg{
+		width: 70px;
+		height: 70px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		margin: 0 auto;
+	}
+	.tableImg >>> .el-image{
+		width: 100%;
+		height: 100%;
+	}
+	.imgErrorMini{
+		width: 70px;
+		height: 70px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #c0c4cc;
+		background: #fafafa;
 	}
 </style>

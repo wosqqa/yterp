@@ -76,21 +76,70 @@ class Service extends Acl {
     public function goodsRecord(){
         $input = input('post.');
         if (existFull($input,['page','limit'])) {
-            $sql=fastSql($input,[
+            $dataText = existFull($input,['data']) ? trim(strval($input['data'])) : '';
+            $setOrderMode = $dataText !== '' && preg_match('/^set/i', $dataText);
+            $sqlInput = $input;
+            if ($setOrderMode) {
+                unset($sqlInput['data']);
+            }
+
+            if (isset($sqlInput['code'])) unset($sqlInput['code']);
+            $sql=fastSql($sqlInput,[
                 [['mate'=>'name|py|number|spec'],'fullLike'],
-                ['code','fullEq'],
                 ['brand','fullEq'],
                 ['type','fullDec1'],
                 ['data','fullLike']
             ]);
-            //辅助属性扩展查询
-            $sqlOr=existFull($input,['code'])?[['id','in',array_column(Db::name('attr')->where([['code','=',$input['code']]])->select()->toArray(),'pid')]]:[];
+            if ($setOrderMode) {
+                $sql[] = ['data','like',$dataText.'%'];
+            }
             //商品分类树结构查询
-            existFull($input,['category'])&&$sql[]=['category','in',findTreeArr('category',$input['category'],'id')];
+            if(existFull($input,['category'])){
+                $cat=$input['category'];
+                if(is_string($cat)){
+                    $text=trim($cat);
+                    if($text!=='' && ($text[0]=='[' || $text[0]=='{')){
+                        $decoded=json_decode($text,true);
+                        if(is_array($decoded)) $cat=$decoded;
+                    }
+                }
+                if(is_string($cat) && strpos($cat,',')!==false){
+                    $cat=array_filter(explode(',',$cat),function($v){return $v!=='';});
+                }
+                if(is_array($cat)){
+                    $ids=[];
+                    foreach ($cat as $cid) {
+                        if($cid===null || $cid==='') continue;
+                        if(!is_numeric($cid) || intval($cid)<=0) continue;
+                        $ids=array_merge($ids,findTreeArr('category',$cid,'id'));
+                    }
+                    $ids=array_values(array_unique($ids));
+                    empty($ids)||$sql[]=['category','in',$ids];
+                }else{
+                    $sql[]=['category','in',findTreeArr('category',$cat,'id')];
+                }
+            }
+            $orSql=[];
+            if(existFull($input,['code'])){
+                $barcode=strval($input['code']);
+                $orSql[]=['code','=',$barcode];
+                $pids=array_column(Db::name('attr')->where([['code','=',$barcode]])->select()->toArray(),'pid');
+                empty($pids)||$orSql[]=['id','in',$pids];
+            }
             //获取总条数
-            $count = Goods::where($sql)->whereOr($sqlOr)->count();
+            $countQuery = Goods::where($sql);
+            empty($orSql) || $countQuery = $countQuery->where(function($query)use($orSql){$query->whereOr($orSql);});
+            $count = $countQuery->count();
             //查询分页数据
-            $info = Goods::with(['categoryData','attr'])->where($sql)->whereOr($sqlOr)->append(['extension'])->page($input['page'],$input['limit'])->order(['id'=>'desc'])->select()->toArray();
+            $query = Goods::with(['categoryData','attr'])->where($sql);
+            empty($orSql) || $query = $query->where(function($query)use($orSql){$query->whereOr($orSql);});
+            $query = $query->append(['extension'])->page($input['page'],$input['limit']);
+            if ($setOrderMode) {
+                $query = $query->orderRaw('CAST(SUBSTRING(data, 4) AS UNSIGNED) ASC, id DESC');
+            } else {
+                $query = $query->order(['id'=>'desc']);
+            }
+            $info = $query->select()->toArray();
             //唯一标识|属性处理
             foreach ($info as $infoKey=>$infoVo) {
                 $info[$infoKey]['key']=$infoVo['id'];
