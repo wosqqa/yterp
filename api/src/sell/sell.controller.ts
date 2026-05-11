@@ -18,22 +18,22 @@ export class SellController {
   }
   
   @Post('get')
-  get(@Body() body: any) {
-    return this.sellService.get(body);
+  get(@Body() body: any, @Req() req: any) {
+    return this.sellService.get(body, req.user);
   }
 
   @Post('del')
-  del(@Body() body: any) {
-    return this.sellService.del(body);
+  del(@Body() body: any, @Req() req: any) {
+    return this.sellService.del(body, req.user);
   }
 
   @Post('check')
-  check(@Body() body: any) {
-    return this.sellService.check(body);
+  check(@Body() body: any, @Req() req: any) {
+    return this.sellService.check(body, req.user);
   }
 
   @Post('examine')
-  examine(@Body() body: any) {
-    return this.sellService.examine(body);
+  examine(@Body() body: any, @Req() req: any) {
+    return this.sellService.examine(body, req.user);
   }
 }

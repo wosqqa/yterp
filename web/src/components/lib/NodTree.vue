@@ -8,13 +8,15 @@
 		<el-tree
 			ref="tree"
 			@check="setTree"
-			@node-click="setTree"
+			@node-click="nodeClick"
 			:data="treeData"
 			:props="treeProps"
 			:node-key="treeKey"
 			:current-node-key="checked"
 			:show-checkbox="checkbox"
 			:check-strictly="checkStrictly"
+			:check-on-click-node="checkbox"
+			:expand-on-click-node="!checkbox"
 			:default-checked-keys="checkeds"
 			:default-expanded-keys="expanded"
 			:highlight-current="true"
@@ -133,6 +135,10 @@
 					this.$emit('input',this.checked);
 					this.$refs['nodTree'].showPopper=false;
 				}
+			},
+			nodeClick(data) {
+				if(this.checkbox) return;
+				this.setTree(data);
 			},
 			//删除绑定数据
 			delModel(){

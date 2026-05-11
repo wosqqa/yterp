@@ -513,9 +513,7 @@ export default {
   methods: {
     //初始化
     init() {
-      this.searchFrom.startTime = this.$moment()
-        .subtract(this.store.sys.fun.days, "days")
-        .format("YYYY-MM-DD");
+      this.searchFrom.startTime = this.$moment().startOf("month").format("YYYY-MM-DD");
       this.searchFrom.endTime = this.$moment().format("YYYY-MM-DD");
     },
     //获取数据

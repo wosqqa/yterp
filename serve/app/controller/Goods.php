@@ -22,7 +22,13 @@ class Goods extends Acl {
             $sql[]=['category','in',findTreeArr('category',$input['category'],'id')];
         }
         $count = Goodss::where($sql)->count();//获取总条数
-        $info = Goodss::with(['categoryData'])->where($sql)->page($input['page'],$input['limit'])->append(['extension'])->order(['id'=>'desc'])->select();//查询分页数据
+        $query = Goodss::with(['categoryData'])->where($sql)->page($input['page'],$input['limit'])->append(['extension']);
+        if(isset($input['sort']) && $input['sort']=='numberAsc'){
+            $query = $query->orderRaw("CASE WHEN number REGEXP '^[sS][0-9]+' THEN 0 ELSE 1 END, CAST(SUBSTRING(number, 2) AS UNSIGNED) ASC, number ASC, id DESC");
+        }else{
+            $query = $query->order(['id'=>'desc']);
+        }
+        $info = $query->select();//查询分页数据
         $result=[
             'state'=>'success',
             'count'=>$count,

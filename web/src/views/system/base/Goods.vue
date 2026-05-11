@@ -340,6 +340,9 @@
 			</transition>
 			<span slot="footer" class="dialog-footer">
 				<el-button @click="dialog.show = false" >取消</el-button>
+				<template v-if="form.id>0 && $lib.getUserRoot(store.root,'base','add')">
+					<el-button @click="copyAdd" type="success" >新增</el-button>
+				</template>
 				<template v-if="form.id==0 || $lib.getUserRoot(store.root,'base','edit')">
 					<el-button @click="save" type="primary" >保存</el-button>
 				</template>
@@ -431,6 +434,7 @@
 					attribute:[],
 					attrChecked:{},
 					disposeActive:[],
+					origin:{id:0,name:"",number:""}
 				},
 				form: {
 					id: 0,
@@ -618,7 +622,8 @@
 				page==0||(this.page.current=page);
 				let parm = Object.assign({
 					page: this.page.current,
-					limit: this.page.size
+					limit: this.page.size,
+					sort: "numberAsc"
 				}, this.searchFrom);
 				this.$axios.post("goods/record", parm).then(result => {
 					if (result.state == "success") {
@@ -642,6 +647,7 @@
 			set(id) {
 				//1.初始化数据
 				this.form = this.$lib.extend(true, {}, this.$options.data().form);
+				this.dialog.origin = {id:0,name:"",number:""};
 				for (let key in this.dialog.attrChecked) {
 					this.dialog.attrChecked[key].checked=false;
 				}
@@ -653,6 +659,11 @@
 					}).then(result => {
 						if (result.state == "success") {
 							this.form = result.info;
+							this.dialog.origin = {
+								id: Number(result.info && result.info.id) || 0,
+								name: result.info && result.info.name != null ? String(result.info.name) : "",
+								number: result.info && result.info.number != null ? String(result.info.number) : ""
+							};
 							//辅助属性选中处理
 							result.info.attr.forEach(attr=>{
 								attr.name.split("|").forEach(item=>{
@@ -681,8 +692,7 @@
 					this.dialog.show = true; //显示弹层
 				}
 			},
-			//保存数据
-			save() {
+			submit(mode) {
 				this.$refs["form"].validate(valid => {
 					if (valid){
 						//辅助属性判断
@@ -828,13 +838,41 @@
 								return false;
 							}
 						}
-						this.$axios.post("goods/save", this.form).then(result => {
+						let payload = this.form;
+						let okMsg = "详情保存成功!";
+						if (mode === "copyAdd") {
+							const origin = this.dialog.origin || {id:0,name:"",number:""};
+							const n1 = this.form && this.form.name != null ? String(this.form.name).trim() : "";
+							const n2 = this.form && this.form.number != null ? String(this.form.number).trim() : "";
+							const o1 = origin && origin.name != null ? String(origin.name).trim() : "";
+							const o2 = origin && origin.number != null ? String(origin.number).trim() : "";
+							if ((Number(origin.id) || 0) > 0 && n1 === o1) {
+								this.$message({ type: "warning", message: "请先修改商品名称后再新增!" });
+								return false;
+							}
+							if ((Number(origin.id) || 0) > 0 && n2 === o2) {
+								this.$message({ type: "warning", message: "请先修改商品编号后再新增!" });
+								return false;
+							}
+							payload = this.$lib.extend(true, {}, this.form);
+							payload.id = 0;
+							if (Array.isArray(payload.attr)) {
+								payload.attr = payload.attr.map(v => {
+									const row = Object.assign({}, v);
+									delete row.id;
+									delete row.pid;
+									return row;
+								});
+							}
+							okMsg = "新增成功!";
+						}
+						this.$axios.post("goods/save", payload).then(result => {
 							if (result.state == "success") {
 								this.record(0);
 								this.dialog.show = false;
 								this.$message({
 									type: "success",
-									message: "详情保存成功!"
+									message: okMsg
 								});
 							} else if (result.state == "error") {
 								this.$message({
@@ -855,6 +893,13 @@
 						});
 					}
 				});
+			},
+			//保存数据
+			save() {
+				this.submit("save");
+			},
+			copyAdd() {
+				this.submit("copyAdd");
 			},
 			//删除数据
 			del(parm) {

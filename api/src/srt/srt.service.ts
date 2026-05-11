@@ -194,7 +194,6 @@ export class SrtService {
     if (endTime) timeWhere.lte = dayjs(endTime).endOf('day').unix();
 
     const baseClassWhere: any = {
-      examine: true,
       ...(Object.keys(timeWhere).length > 0 ? { time: timeWhere } : {}),
     };
     if (customer) baseClassWhere.customer = Number(customer);
@@ -214,11 +213,11 @@ export class SrtService {
     const warehouseIds: number[] = Array.isArray(warehouse) ? warehouse.map((v: any) => Number(v)).filter((v) => v) : [];
 
     const sellClass = await this.prisma.sell.findMany({
-      where: baseClassWhere,
+      where: { ...baseClassWhere, examine: 1 },
       select: { id: true, customer: true, user: true, people: true },
     });
     const sreClass = await this.prisma.sre.findMany({
-      where: baseClassWhere,
+      where: { ...baseClassWhere, examine: true },
       select: { id: true, customer: true, user: true, people: true },
     });
     const sellIds = sellClass.map((c) => c.id);
@@ -346,7 +345,6 @@ export class SrtService {
     if (endTime) timeWhere.lte = dayjs(endTime).endOf('day').unix();
 
     const baseWhere: any = {
-      examine: true,
       ...(Object.keys(timeWhere).length > 0 ? { time: timeWhere } : {}),
     };
     if (customer) baseWhere.customer = Number(customer);
@@ -364,7 +362,7 @@ export class SrtService {
 
     if (molds.includes('sell')) {
       const rows = await this.prisma.sell.findMany({
-        where: baseWhere,
+        where: { ...baseWhere, examine: 1 },
         select: { id: true, frame: true, customer: true, time: true, number: true, total: true, actual: true, money: true, data: true },
         orderBy: { time: 'desc' },
       });
@@ -373,7 +371,7 @@ export class SrtService {
 
     if (molds.includes('sre')) {
       const rows = await this.prisma.sre.findMany({
-        where: baseWhere,
+        where: { ...baseWhere, examine: true },
         select: { id: true, frame: true, customer: true, time: true, number: true, total: true, actual: true, money: true, data: true },
         orderBy: { time: 'desc' },
       });

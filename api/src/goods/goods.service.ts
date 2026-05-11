@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TreeUtil } from '../utils/tree.util';
+import { Prisma } from '@prisma/client';
 import * as XLSX from 'xlsx';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -11,7 +12,7 @@ export class GoodsService {
   constructor(private prisma: PrismaService) {}
 
   async record(body: any, user: any) {
-    const { page, limit, name, number, spec, category, brand, data } = body;
+    const { page, limit, name, number, spec, category, brand, data, sort } = body;
     const where: any = {};
 
     // Build query conditions
@@ -40,13 +41,63 @@ export class GoodsService {
       categoryIds.length > 0 && (where.category = { in: categoryIds });
     }
 
-    const count = await this.prisma.goods.count({ where });
-    const list = await this.prisma.goods.findMany({
-      where,
-      skip: (Number(page) - 1) * Number(limit),
-      take: Number(limit),
-      orderBy: { id: 'desc' },
-    });
+    const skip = (Number(page) - 1) * Number(limit);
+    const take = Number(limit);
+    let count = 0;
+    let list: any[] = [];
+    if (String(sort || '') === 'numberAsc') {
+      let categoryIds: number[] = [];
+      if (category !== undefined && category !== null && category !== '') {
+        const allCategories = await this.prisma.category.findMany();
+        const raw = Array.isArray(category) ? category : [category];
+        const roots = raw
+          .map((v) => Number(v))
+          .filter((v) => Number.isFinite(v) && v > 0);
+        const idSet = new Set<number>();
+        roots.forEach((rootId) => {
+          TreeUtil.getTreeIds(allCategories, rootId).forEach((id) => idSet.add(Number(id)));
+        });
+        categoryIds = [...idSet].filter((v) => Number.isFinite(v) && v > 0);
+      }
+
+      const whereSqlParts: Prisma.Sql[] = [];
+      if (name) {
+        const q = `%${String(name)}%`;
+        whereSqlParts.push(Prisma.sql`(name LIKE ${q} OR py LIKE ${q})`);
+      }
+      if (number) whereSqlParts.push(Prisma.sql`number LIKE ${'%' + String(number) + '%'}`);
+      if (spec) whereSqlParts.push(Prisma.sql`spec LIKE ${'%' + String(spec) + '%'}`);
+      if (brand) whereSqlParts.push(Prisma.sql`brand LIKE ${'%' + String(brand) + '%'}`);
+      if (data) whereSqlParts.push(Prisma.sql`data LIKE ${'%' + String(data) + '%'}`);
+      if (categoryIds.length > 0) whereSqlParts.push(Prisma.sql`category IN (${Prisma.join(categoryIds)})`);
+      const whereSql = whereSqlParts.length > 0 ? Prisma.sql`WHERE ${Prisma.join(whereSqlParts, ' AND ')}` : Prisma.empty;
+
+      const countRows: Array<{ cnt: any }> = await this.prisma.$queryRaw(
+        Prisma.sql`SELECT COUNT(*) AS cnt FROM is_goods ${whereSql}`,
+      );
+      count = Number(countRows && countRows[0] ? countRows[0].cnt : 0) || 0;
+
+      const idRows: Array<{ id: number }> = await this.prisma.$queryRaw(
+        Prisma.sql`SELECT id FROM is_goods ${whereSql} ORDER BY CASE WHEN number REGEXP '^[sS][0-9]+' THEN 0 ELSE 1 END, CAST(SUBSTRING(number, 2) AS UNSIGNED) ASC, number ASC, id DESC LIMIT ${take} OFFSET ${skip}`,
+      );
+      const ids = idRows.map((r) => Number(r.id)).filter((v) => v);
+      if (ids.length > 0) {
+        const rows = await this.prisma.goods.findMany({ where: { id: { in: ids } } });
+        const byId = new Map<number, any>();
+        rows.forEach((r) => byId.set(Number(r.id), r));
+        list = ids.map((id) => byId.get(id)).filter((v) => v);
+      } else {
+        list = [];
+      }
+    } else {
+      count = await this.prisma.goods.count({ where });
+      list = await this.prisma.goods.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { id: 'desc' },
+      });
+    }
 
     const categoryIds = [...new Set(list.map(item => item.category))];
     const categories = await this.prisma.category.findMany({ where: { id: { in: categoryIds } } });
@@ -79,7 +130,7 @@ export class GoodsService {
   }
 
   async save(body: any, user: any) {
-    const { id, name, number, spec, category, brand, unit, buy, sell, retail, integral, code, location, stock, type, data, imgs, units, strategy, serial, batch, protect, threshold, more } = body;
+    const { id, name, number, spec, category, brand, unit, buy, sell, code, location, stock, type, data, imgs, details, units, strategy, serial, batch, validity, protect, threshold, more, attr } = body;
 
     if (!name) return { state: 'error', info: '商品名称不能为空!' };
 
@@ -101,27 +152,53 @@ export class GoodsService {
       type: type === 1 || type === '1' || type === true,
       data,
       imgs: typeof imgs === 'string' ? imgs : JSON.stringify(imgs || []),
-      details: '',
+      details: details != null ? String(details) : '',
       units: typeof units === 'string' ? units : JSON.stringify(units || []),
       strategy: typeof strategy === 'string' ? strategy : JSON.stringify(strategy || []),
       serial: serial === 1 || serial === '1' || serial === true,
       batch: batch === 1 || batch === '1' || batch === true,
-      validity: false,
+      validity: validity === 1 || validity === '1' || validity === true,
       protect: protect ? Number(protect) : 0,
       threshold: threshold ? Number(threshold) : 0,
-      more: typeof more === 'string' ? more : JSON.stringify(more || []),
+      more: typeof more === 'string' ? more : JSON.stringify(more || {}),
     };
 
-    if (id) {
-        await this.prisma.goods.update({
-            where: { id: Number(id) },
-            data: inputData
+    const attrs = Array.isArray(attr) ? attr : [];
+    await this.prisma.$transaction(async (tx) => {
+      let goodsId = Number(id) || 0;
+      if (goodsId > 0) {
+        await tx.goods.update({
+          where: { id: goodsId },
+          data: inputData,
         });
-    } else {
-        await this.prisma.goods.create({
-            data: inputData
+      } else {
+        const created = await tx.goods.create({
+          data: inputData,
+          select: { id: true },
         });
-    }
+        goodsId = Number(created.id) || 0;
+      }
+
+      await tx.$executeRaw(Prisma.sql`DELETE FROM is_attr WHERE pid = ${goodsId}`);
+      if (attrs.length > 0) {
+        const rows = attrs
+          .map((a: any) => {
+            const n = a && a.name != null ? String(a.name) : '';
+            const b = a && a.buy != null ? Number(a.buy) : 0;
+            const s = a && a.sell != null ? Number(a.sell) : 0;
+            const c = a && a.code != null ? String(a.code) : '';
+            if (!n) return null;
+            return Prisma.sql`(${goodsId}, ${n}, ${b}, ${s}, ${c})`;
+          })
+          .filter((v: any) => v);
+        if (rows.length > 0) {
+          await tx.$executeRaw(
+            Prisma.sql`INSERT INTO is_attr (pid, name, buy, sell, code) VALUES ${Prisma.join(rows)}`,
+          );
+        }
+      }
+    });
+
     return { state: 'success' };
   }
 
@@ -134,12 +211,27 @@ export class GoodsService {
         try { (info as any).units = info.units ? JSON.parse(info.units) : []; } catch (e) { (info as any).units = []; }
         try { (info as any).strategy = info.strategy ? JSON.parse(info.strategy) : []; } catch (e) { (info as any).strategy = []; }
         try { (info as any).more = info.more ? JSON.parse(info.more) : {}; } catch (e) { (info as any).more = {}; }
+
+        const attrRows: Array<{ id: number; pid: number; name: string; buy: any; sell: any; code: string }> =
+          await this.prisma.$queryRaw(
+            Prisma.sql`SELECT id, pid, name, buy, sell, code FROM is_attr WHERE pid = ${Number(id)} ORDER BY id DESC`,
+          );
+        const attrs = attrRows.map((a) => {
+          return {
+            id: Number(a.id),
+            pid: Number(a.pid),
+            name: a.name,
+            buy: Number(a.buy),
+            sell: Number(a.sell),
+            code: a.code,
+          };
+        });
         
         return { 
             state: 'success', 
             info: { 
                 ...info, 
-                attr: [],
+                attr: attrs,
                 type: info.type ? 1 : 0,
                 serial: info.serial,
                 batch: info.batch,
@@ -151,6 +243,45 @@ export class GoodsService {
     } else {
       return { state: 'error', info: '传入参数不完整!' };
     }
+  }
+
+  async del(body: any, user: any) {
+    const { parm } = body;
+    if (!parm || !Array.isArray(parm) || parm.length === 0) {
+      return { state: 'error', info: '传入参数不完整!' };
+    }
+    const ids = parm.map((v: any) => Number(v)).filter((v: number) => Number.isFinite(v) && v > 0);
+    if (ids.length === 0) return { state: 'error', info: '传入参数不完整!' };
+
+    const [
+      sorInfoCnt,
+      sellInfoCnt,
+      borInfoCnt,
+      buyInfoCnt,
+      breInfoCnt,
+      entryInfoCnt,
+      swapInfoCnt,
+    ] = await Promise.all([
+      this.prisma.sorInfo.count({ where: { goods: { in: ids } } }),
+      this.prisma.sellInfo.count({ where: { goods: { in: ids } } }),
+      this.prisma.borInfo.count({ where: { goods: { in: ids } } }),
+      this.prisma.buyInfo.count({ where: { goods: { in: ids } } }),
+      this.prisma.breInfo.count({ where: { goods: { in: ids } } }),
+      this.prisma.entryInfo.count({ where: { goods: { in: ids } } }),
+      this.prisma.swapInfo.count({ where: { goods: { in: ids } } }),
+    ]);
+    const existCnt =
+      sorInfoCnt + sellInfoCnt + borInfoCnt + buyInfoCnt + breInfoCnt + entryInfoCnt + swapInfoCnt;
+    if (existCnt > 0) {
+      return { state: 'error', info: '存在数据关联,删除失败!' };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(Prisma.sql`DELETE FROM is_attr WHERE pid IN (${Prisma.join(ids)})`);
+      await tx.goods.deleteMany({ where: { id: { in: ids } } });
+    });
+
+    return { state: 'success' };
   }
 
   async upload(file: any) {

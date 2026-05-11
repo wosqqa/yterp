@@ -91,7 +91,7 @@
       :data="tableData"
       :tree-props="{ children: 'node' }"
       row-key="key"
-      height="calc(100% - 90px)"
+      height="calc(100% - 132px)"
       border
       v-madeTable
     >
@@ -269,17 +269,24 @@
         width="200px"
       ></el-table-column>
     </el-table>
-    <el-pagination
-      class="tablePagination"
-      :current-page.sync="page.current"
-      :total="page.total"
-      :page-size.sync="page.size"
-      :page-sizes="page.sizes"
-      :pager-count="page.count"
-      @size-change="record(1)"
-      @current-change="record(0)"
-      layout="prev,pager,next,jumper,sizes,total"
-    ></el-pagination>
+    <div class="footer">
+      <el-pagination
+        class="tablePagination"
+        :current-page.sync="page.current"
+        :total="page.total"
+        :page-size.sync="page.size"
+        :page-sizes="page.sizes"
+        :pager-count="page.count"
+        @size-change="record(1)"
+        @current-change="record(0)"
+        layout="prev,pager,next,jumper,sizes,total"
+      ></el-pagination>
+      <div class="summaryBar">
+        <div class="summaryItem">总销售额：{{ summary.salesText }}</div>
+        <div class="summaryItem">总利润：{{ summary.profitText }}</div>
+        <div class="summaryItem">总利润率：{{ summary.rateText }}</div>
+      </div>
+    </div>
   </div>
 </template>
 <script>
@@ -300,6 +307,14 @@ export default {
         people: null,
         mold: [],
         type: 0,
+      },
+      summary: {
+        sales: 0,
+        profit: 0,
+        rate: "0.00%",
+        salesText: "0.00",
+        profitText: "0.00",
+        rateText: "0.00%",
       },
       tableData: [],
       tableType: 0,
@@ -325,9 +340,7 @@ export default {
   methods: {
     //初始化
     init() {
-      this.searchFrom.startTime = this.$moment()
-        .subtract(this.store.sys.fun.days, "days")
-        .format("YYYY-MM-DD");
+      this.searchFrom.startTime = this.$moment().startOf("month").format("YYYY-MM-DD");
       this.searchFrom.endTime = this.$moment().format("YYYY-MM-DD");
     },
     //获取数据
@@ -344,6 +357,29 @@ export default {
         if (result.state == "success") {
           this.tableData = result.info;
           this.page.total = result.count;
+          const sum = result.sum || {};
+          const sales = Number(sum.sales);
+          const profit = Number(sum.profit);
+          const rate = typeof sum.rate === "string" ? sum.rate : "0.00%";
+          if (Number.isFinite(sales) && Number.isFinite(profit)) {
+            this.summary.sales = sales;
+            this.summary.profit = profit;
+            this.summary.rate = rate;
+            this.summary.salesText = sales.toFixed(2);
+            this.summary.profitText = profit.toFixed(2);
+            this.summary.rateText = rate;
+          } else {
+            const rows = (result.info || []).filter((r) => r && r.bill);
+            const fallbackSales = rows.reduce((s, r) => s + Number(r.actual || 0), 0);
+            const fallbackProfit = rows.reduce((s, r) => s + Number(r.npt || 0), 0);
+            const fallbackRate = fallbackSales === 0 ? 0 : (fallbackProfit / fallbackSales) * 100;
+            this.summary.sales = fallbackSales;
+            this.summary.profit = fallbackProfit;
+            this.summary.rate = `${fallbackRate.toFixed(2)}%`;
+            this.summary.salesText = fallbackSales.toFixed(2);
+            this.summary.profitText = fallbackProfit.toFixed(2);
+            this.summary.rateText = this.summary.rate;
+          }
           this.$refs["searchPopover"].showPopper = false;
           //ELEMENT更新错位.暂延时处理
           this.tableType = -1;
@@ -393,6 +429,24 @@ export default {
 .layout {
   display: flex;
   justify-content: space-between;
+}
+.footer {
+  display: flex;
+  align-items: center;
+}
+.summaryBar {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+}
+.summaryItem {
+  padding: 6px 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 12px;
+  color: #606266;
 }
 .el-table >>> .el-table__row--level-1 {
   background: #fcfcfc;

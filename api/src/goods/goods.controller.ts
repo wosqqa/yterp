@@ -26,6 +26,11 @@ export class GoodsController {
     return this.goodsService.get(body);
   }
 
+  @Post('del')
+  del(@Body() body: any, @Req() req: any) {
+    return this.goodsService.del(body, req.user);
+  }
+
   @Post('upload')
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({

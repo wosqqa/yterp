@@ -205,11 +205,11 @@ model Sell {
   file      String? @db.Text // 单据附件
   data      String? @default("") @db.VarChar(256) // 备注信息
   more      String? @db.Text // 扩展信息
-  examine   Boolean // 审核状态
-  nucleus   Boolean // 核销状态
-  cse       Boolean // 费用状态
-  invoice   Boolean // 发票状态
-  check     Boolean // 核对状态
+  examine   Int     @default(0) @db.TinyInt // 审核状态[0:未审核|1:已审核]
+  nucleus   Int     @default(0) @db.TinyInt // 核销状态[0:未核销|1:部分核销|2:已核销]
+  cse       Int     @default(0) @db.TinyInt // 费用状态[0:未结算|1:部分结算|2:已结算|3:无需结算]
+  invoice   Int     @default(0) @db.TinyInt // 发票状态[0:未开票|1:部分开票|2:已开票|3:无需开具]
+  check     Int     @default(0) @db.TinyInt // 核对状态[0:未核对|1:已核对]
   user      Int // 制单人
 
   @@map("is_sell")
@@ -224,7 +224,7 @@ model SellInfo {
   unit      String? @default("") @db.VarChar(32) // 商品单位
   warehouse Int?    @default(0) // 所属仓库
   batch     String? @default("") @db.VarChar(64) // 批次号
-  mfd       String? @default("") @db.VarChar(32) // 生产日期
+  mfd       Int?    @default(0) // 生产日期
   price     Decimal @db.Decimal(12, 4) // 单价
   nums      Decimal @db.Decimal(12, 4) // 数量
   serial    String? @db.Text // 序列号
@@ -238,6 +238,31 @@ model SellInfo {
   data      String? @default("") @db.VarChar(256) // 备注信息
 
   @@map("is_sell_info")
+}
+
+model SellBill {
+  id     Int     @id @default(autoincrement())
+  pid    Int // 所属单据
+  type   String  @db.VarChar(32) // 核销类型
+  source Int // 关联单据
+  time   Int // 单据时间
+  money  Decimal @db.Decimal(16, 4) // 核销金额
+
+  @@map("is_sell_bill")
+}
+
+model Invoice {
+  id     Int     @id @default(autoincrement())
+  type   String  @db.VarChar(32) // 单据类型
+  class  Int // 所属单据
+  time   Int // 开票时间
+  number String  @db.VarChar(64) // 发票号码
+  title  String  @db.VarChar(64) // 发票抬头
+  money  Decimal @db.Decimal(16, 4) // 开票金额
+  file   String  @db.Text // 发票附件
+  data   String  @db.VarChar(256) // 备注信息
+
+  @@map("is_invoice")
 }
 
 
@@ -808,12 +833,21 @@ model SwapInfo {
 }
 
 model Bill {
-  id     Int     @id @default(autoincrement())
-  type   String  @db.VarChar(32) // 单据类型
-  class  Int // 所属单据
-  source Int // 关联单据
-  time   Int // 核销时间
-  money  Decimal @db.Decimal(16, 4) // 核销金额
+  id       Int     @id @default(autoincrement())
+  frame    Int // 所属组织
+  customer Int // 客户
+  supplier Int // 供应商
+  time     Int // 单据时间
+  number   String  @db.VarChar(32) // 单据编号
+  type     Int     @db.TinyInt // 核销类型[0:预收冲应收|1:预付冲应付|2:应收冲应付|3:销退冲销售|4:购退冲采购]
+  pmy      Decimal @db.Decimal(16, 4) // 总核金额
+  smp      Decimal @db.Decimal(16, 4) // 总销金额
+  people   Int?    @default(0) // 关联人员
+  file     String? @db.Text // 单据附件
+  data     String? @default("") @db.VarChar(256) // 备注信息
+  more     String? @db.Text // 扩展信息
+  examine  Int     @default(0) @db.TinyInt // 审核状态[0:未审核|1:已审核]
+  user     Int // 制单人
 
   @@map("is_bill")
 }

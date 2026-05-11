@@ -18,7 +18,6 @@ export class MrtService {
     if (endTime) timeWhere.lte = dayjs(endTime).endOf('day').unix();
 
     const baseWhere: any = {
-      examine: true,
       ...(Object.keys(timeWhere).length > 0 ? { time: timeWhere } : {}),
     };
     if (customer) baseWhere.customer = Number(customer);
@@ -31,7 +30,7 @@ export class MrtService {
 
     if (molds.includes('sell')) {
       const rows = await this.prisma.sell.findMany({
-        where: baseWhere,
+        where: { ...baseWhere, examine: 1 },
         orderBy: [{ time: 'desc' }, { id: 'desc' }],
       });
       rows.forEach((r: any) => list.push({ mold: 'sell', bill: '销售单', row: r, sort: Number(r.time) }));
@@ -39,7 +38,7 @@ export class MrtService {
 
     if (molds.includes('sre')) {
       const rows = await (this.prisma as any).sre.findMany({
-        where: baseWhere,
+        where: { ...baseWhere, examine: true },
         orderBy: [{ time: 'desc' }, { id: 'desc' }],
       });
       rows.forEach((r: any) => list.push({ mold: 'sre', bill: '销售退货单', row: r, sort: Number(r.time) }));
@@ -55,6 +54,47 @@ export class MrtService {
     const skip = (Number(page) - 1) * Number(limit);
     const take = Number(limit);
     const paged = list.slice(skip, skip + take);
+
+    const allSellIds = [...new Set(list.filter((x) => x.mold === 'sell').map((x) => Number(x.row.id)).filter((v) => v))];
+    const allSreIds = [...new Set(list.filter((x) => x.mold === 'sre').map((x) => Number(x.row.id)).filter((v) => v))];
+
+    const [sellActGroup, sreActGroup] = await Promise.all([
+      allSellIds.length > 0
+        ? this.prisma.summary.groupBy({
+            by: ['class'],
+            where: { type: 'sell', class: { in: allSellIds } },
+            _sum: { bct: true },
+          })
+        : Promise.resolve([]),
+      allSreIds.length > 0
+        ? this.prisma.summary.groupBy({
+            by: ['class'],
+            where: { type: 'sre', class: { in: allSreIds } },
+            _sum: { bct: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const sellActMap = new Map<number, number>((sellActGroup as any[]).map((x) => [Number(x.class), Number(x._sum?.bct || 0)]));
+    const sreActMap = new Map<number, number>((sreActGroup as any[]).map((x) => [Number(x.class), Number(x._sum?.bct || 0)]));
+
+    let sumSales = 0;
+    let sumAct = 0;
+    let sumFee = 0;
+    for (const x of list) {
+      const row = x.row;
+      const sign = x.mold === 'sre' ? -1 : 1;
+      const id = Number(row.id);
+      const actual = Number(row.actual) * sign;
+      const fee = Number(row.cost) * sign;
+      const actBase = x.mold === 'sre' ? sreActMap.get(id) || 0 : sellActMap.get(id) || 0;
+      const act = actBase * sign;
+      sumSales += actual;
+      sumFee += fee;
+      sumAct += act;
+    }
+    const sumProfit = sumSales - sumAct - sumFee;
+    const sumRate = sumSales === 0 ? 0 : (sumProfit / sumSales) * 100;
 
     const frameIds = [...new Set(paged.map((x) => Number(x.row.frame)).filter((v) => v || v === 0))];
     const customerIds = [...new Set(paged.map((x) => Number(x.row.customer)).filter((v) => v))];
@@ -77,13 +117,13 @@ export class MrtService {
     const sellInfos = detailMode && docIdsByMold.sell.length > 0
       ? await (this.prisma as any).sellInfo.findMany({
           where: { pid: { in: docIdsByMold.sell } },
-          select: { pid: true, goods: true, attr: true, unit: true, price: true, nums: true, dsc: true, total: true, tat: true, tpt: true },
+          select: { id: true, pid: true, goods: true, attr: true, unit: true, price: true, nums: true, dsc: true, total: true, tat: true, tpt: true },
         })
       : [];
     const sreInfos = detailMode && docIdsByMold.sre.length > 0
       ? await (this.prisma as any).sreInfo.findMany({
           where: { pid: { in: docIdsByMold.sre } },
-          select: { pid: true, goods: true, attr: true, unit: true, price: true, nums: true, dsc: true, total: true, tat: true, tpt: true },
+          select: { id: true, pid: true, goods: true, attr: true, unit: true, price: true, nums: true, dsc: true, total: true, tat: true, tpt: true },
         })
       : [];
 
@@ -91,6 +131,32 @@ export class MrtService {
       ? [...new Set([...sellInfos, ...sreInfos].map((i: any) => Number(i.goods)).filter((v) => v))]
       : [];
     const goodsList = goodsIdList.length > 0 ? await this.prisma.goods.findMany({ where: { id: { in: goodsIdList } } }) : [];
+
+    const [sellInfoActGroup, sreInfoActGroup] = await Promise.all([
+      detailMode && (sellInfos as any[]).length > 0
+        ? this.prisma.summary.groupBy({
+            by: ['info'],
+            where: { type: 'sell', info: { in: [...new Set((sellInfos as any[]).map((x) => Number(x.id)).filter((v) => v))] } },
+            _sum: { bct: true },
+          })
+        : Promise.resolve([]),
+      detailMode && (sreInfos as any[]).length > 0
+        ? this.prisma.summary.groupBy({
+            by: ['info'],
+            where: { type: 'sre', info: { in: [...new Set((sreInfos as any[]).map((x) => Number(x.id)).filter((v) => v))] } },
+            _sum: { bct: true },
+          })
+        : Promise.resolve([]),
+    ]);
+    const sellInfoActMap = new Map<number, number>((sellInfoActGroup as any[]).map((x) => [Number(x.info), Number(x._sum?.bct || 0)]));
+    const sreInfoActMap = new Map<number, number>((sreInfoActGroup as any[]).map((x) => [Number(x.info), Number(x._sum?.bct || 0)]));
+
+    const toPercent = (numerator: number, denominator: number, isReturn: boolean) => {
+      if (denominator === 0) return `${numerator === 0 ? 0 : -100}%`;
+      const rate = (numerator / denominator) * 100;
+      const out = isReturn ? -Math.abs(rate) : rate;
+      return `${out.toFixed(2)}%`;
+    };
 
     const info = paged.map((x) => {
       const row = x.row;
@@ -100,11 +166,12 @@ export class MrtService {
       const cost = Number(row.cost) * sign;
       const money = Number(row.money) * sign;
       const discount = Number((total - actual).toFixed(4));
-      const act = 0;
+      const actBase = x.mold === 'sre' ? sreActMap.get(Number(row.id)) || 0 : sellActMap.get(Number(row.id)) || 0;
+      const act = Number((actBase * sign).toFixed(4));
       const gpt = Number((actual - act).toFixed(4));
-      const gpr = actual === 0 ? 0 : Number((gpt / actual).toFixed(4));
       const npt = Number((gpt - cost).toFixed(4));
-      const npr = actual === 0 ? 0 : Number((npt / actual).toFixed(4));
+      const gpr = toPercent(gpt, actual, x.mold === 'sre');
+      const npr = toPercent(npt, actual, x.mold === 'sre');
       const nucleusState = money === 0 ? '未核销' : Math.abs(money) >= Math.abs(actual) ? '已核销' : '部分核销';
 
       const base: any = {
@@ -142,9 +209,10 @@ export class MrtService {
           const ddsc = Number(d.dsc) * sign;
           const dnums = Number(d.nums) * sign;
           const dprice = Number(d.price) * sign;
-          const dact = 0;
+          const dactBase = x.mold === 'sre' ? sreInfoActMap.get(Number(d.id)) || 0 : sellInfoActMap.get(Number(d.id)) || 0;
+          const dact = goodsData && (goodsData as any).type ? 0 : Number((dactBase * sign).toFixed(4));
           const dgpt = Number((dtpt - dact).toFixed(4));
-          const dgpr = dtpt === 0 ? 0 : Number((dgpt / dtpt).toFixed(4));
+          const dgpr = toPercent(dgpt, dtpt, x.mold === 'sre');
           return {
             key: `${base.key}_${idx}`,
             bill: '',
@@ -152,15 +220,15 @@ export class MrtService {
             customerData: base.customerData,
             time: base.time,
             number: base.number,
-            total: base.total,
-            discount: base.discount,
-            actual: base.actual,
-            act: base.act,
-            gpt: base.gpt,
-            gpr: base.gpr,
-            cost: base.cost,
-            npt: base.npt,
-            npr: base.npr,
+            total: '',
+            discount: '',
+            actual: '',
+            act: dact,
+            gpt: dgpt,
+            gpr: dgpr,
+            cost: '',
+            npt: '',
+            npr: '',
             data: base.data,
             extension: base.extension,
             detail: {
@@ -184,7 +252,16 @@ export class MrtService {
       return base;
     });
 
-      return { state: 'success', count, info };
+      return {
+        state: 'success',
+        count,
+        info,
+        sum: {
+          sales: Number(sumSales.toFixed(4)),
+          profit: Number(sumProfit.toFixed(4)),
+          rate: `${sumRate.toFixed(2)}%`,
+        },
+      };
     } catch (e: any) {
       return { state: 'error', info: e?.message || '内部错误' };
     }
@@ -206,11 +283,11 @@ export class MrtService {
     if (startTime) timeWhere.gte = dayjs(startTime).startOf('day').unix();
     if (endTime) timeWhere.lte = dayjs(endTime).endOf('day').unix();
 
-    const classWhere: any = { examine: true, ...(Object.keys(timeWhere).length > 0 ? { time: timeWhere } : {}) };
+    const classWhere: any = { ...(Object.keys(timeWhere).length > 0 ? { time: timeWhere } : {}) };
     if (user && user.role !== 0 && user.frame) classWhere.frame = Number(user.frame);
 
-    const sellClass = await this.prisma.sell.findMany({ where: classWhere, select: { id: true } });
-    const sreClass = await (this.prisma as any).sre.findMany({ where: classWhere, select: { id: true } });
+    const sellClass = await this.prisma.sell.findMany({ where: { ...classWhere, examine: 1 }, select: { id: true } });
+    const sreClass = await (this.prisma as any).sre.findMany({ where: { ...classWhere, examine: true }, select: { id: true } });
     const sellIds = sellClass.map((c: any) => c.id);
     const sreIds = sreClass.map((c: any) => c.id);
 

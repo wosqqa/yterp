@@ -14,11 +14,29 @@
           <div class="panelHeader">
             <div class="panelTitle">已选商品</div>
             <div class="panelActions">
+              <el-input
+                class="batchInput"
+                size="mini"
+                placeholder="数量"
+                v-model="batchNums"
+                clearable
+              ></el-input>
+              <el-button size="mini" type="danger" @click="applyBatchNums">修改</el-button>
               <el-button size="mini" @click="clearSelected">清空</el-button>
             </div>
           </div>
           <div class="panelBody">
-            <el-table :data="selectedList" height="calc(100vh - 220px)" size="mini" border v-madeTable>
+            <el-table
+              ref="selectedTable"
+              :data="selectedList"
+              height="calc(100vh - 220px)"
+              size="mini"
+              border
+              v-madeTable
+              @selection-change="selectedSelectionChange"
+              @row-click="selectedRowClick"
+            >
+              <el-table-column type="selection" width="44px" align="center"></el-table-column>
               <el-table-column label="图片" width="90px" align="center">
                 <template slot-scope="scope">
                   <div class="selectedImg">
@@ -159,6 +177,8 @@ export default {
         data: "",
         category: []
       },
+      batchNums: "",
+      batchSelected: [],
       selectedMap: {},
       selectedOrder: [],
       syncing: false
@@ -248,6 +268,10 @@ export default {
         },
         this.searchFrom
       );
+      const dataText = this.searchFrom && this.searchFrom.data != null ? String(this.searchFrom.data).trim() : "";
+      if (!dataText && this.recordAction && /goodsRecord/i.test(String(this.recordAction))) {
+        parm.sort = "numberAsc";
+      }
       if (Array.isArray(parm.category) && parm.category.length === 0) {
         delete parm.category;
       }
@@ -293,10 +317,23 @@ export default {
             }
             return selectedIndex.hasOwnProperty(cid) ? selectedIndex[cid] : selectedRoots.length + 1;
           };
+          const sortByNumberOnly = !(this.searchFrom && String(this.searchFrom.data || "").trim());
           const cmp = (a, b) => {
+            const na = a && a.number != null ? String(a.number).trim() : "";
+            const nb = b && b.number != null ? String(b.number).trim() : "";
+            if (sortByNumberOnly) {
+              const c2 = na.localeCompare(nb, undefined, { numeric: true, sensitivity: "base" });
+              if (c2 !== 0) return c2;
+              return (Number(b && b.id) || 0) - (Number(a && a.id) || 0);
+            }
+
             const sa = a && a.data != null ? String(a.data).trim() : "";
             const sb = b && b.data != null ? String(b.data).trim() : "";
-            if (!sa && !sb) return (Number(b && b.id) || 0) - (Number(a && a.id) || 0);
+            if (!sa && !sb) {
+              const c2 = na.localeCompare(nb, undefined, { numeric: true, sensitivity: "base" });
+              if (c2 !== 0) return c2;
+              return (Number(b && b.id) || 0) - (Number(a && a.id) || 0);
+            }
             if (!sa) return 1;
             if (!sb) return -1;
             const c = sa.localeCompare(sb, undefined, { numeric: true, sensitivity: "base" });
@@ -304,8 +341,6 @@ export default {
             const gi = groupIdx(a);
             const gj = groupIdx(b);
             if (gi !== gj) return gi - gj;
-            const na = a && a.number != null ? String(a.number).trim() : "";
-            const nb = b && b.number != null ? String(b.number).trim() : "";
             const c2 = na.localeCompare(nb, undefined, { numeric: true, sensitivity: "base" });
             if (c2 !== 0) return c2;
             return (Number(b && b.id) || 0) - (Number(a && a.id) || 0);
@@ -372,6 +407,39 @@ export default {
       this.selectedMap = {};
       this.selectedOrder = [];
       this.emitInput();
+      this.$refs.selectedTable && this.$refs.selectedTable.clearSelection();
+    },
+    selectedSelectionChange(rows) {
+      this.batchSelected = Array.isArray(rows) ? rows : [];
+    },
+    selectedRowClick(row, column, event) {
+      if (!row) return;
+      const target = event && event.target ? event.target : null;
+      if (target && typeof target.closest === "function") {
+        if (target.closest(".el-checkbox")) return;
+        if (target.closest(".el-input")) return;
+        if (target.closest("button")) return;
+        if (target.closest("a")) return;
+      }
+      const selected = Array.isArray(this.batchSelected) && this.batchSelected.some(r => Number(r.id) === Number(row.id));
+      this.$refs.selectedTable && this.$refs.selectedTable.toggleRowSelection(row, !selected);
+    },
+    applyBatchNums() {
+      const next = Number(this.batchNums);
+      if (!Number.isFinite(next) || next <= 0) {
+        this.$message && this.$message({ type: "warning", message: "请输入有效数量!" });
+        return;
+      }
+      if (!Array.isArray(this.batchSelected) || this.batchSelected.length === 0) {
+        this.$message && this.$message({ type: "warning", message: "请先勾选需要修改的商品!" });
+        return;
+      }
+      this.batchSelected.forEach(row => {
+        if (!row || !row.id) return;
+        row.nums = next;
+      });
+      this.selectedMap = Object.assign({}, this.selectedMap);
+      this.emitInput();
     },
     numsChange(row) {
       if (this.$lib.validate("empty", row.nums)) {
@@ -430,6 +498,14 @@ export default {
 }
 .panelTitle {
   font-weight: 600;
+}
+.panelActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.batchInput {
+  width: 60px;
 }
 .panelBody {
   flex: 1;

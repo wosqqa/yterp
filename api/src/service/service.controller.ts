@@ -1,7 +1,8 @@
-import { Controller, Post, UseGuards, Request, Body } from '@nestjs/common';
+import { Controller, Post, UseGuards, Request, Body, Res } from '@nestjs/common';
 import { ServiceService } from './service.service';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import type { Response } from 'express';
 
 @ApiTags('service')
 @Controller('service')
@@ -81,5 +82,19 @@ export class ServiceController {
   @ApiOperation({ summary: 'Get Customer List' })
   customerRecord(@Body() body: any, @Request() req) {
     return this.serviceService.customerRecord(body, req.user);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @Post('exportXlsx')
+  exportXlsx(@Body() body: any, @Request() req, @Res() res: Response) {
+    return Promise.resolve(this.serviceService.exportXlsx(body, req.user)).then((result: any) => {
+      if (!result || result.state !== 'success') {
+        return res.json(result || { state: 'error', info: '内部错误' });
+      }
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=${encodeURIComponent(result.fileName || 'export.xlsx')}`);
+      res.send(result.buffer);
+    });
   }
 }

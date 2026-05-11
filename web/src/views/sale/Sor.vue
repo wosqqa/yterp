@@ -445,6 +445,10 @@ export default {
             headerName: "单价",
             width: 90,
             field: "price",
+            headerComponent: "allowance",
+            headerComponentParams: {
+              dispose: { title: "单价", key: "priceDelta" },
+            },
             editable: true,
             cellEditor: "price",
             cellEditorParams: {
@@ -489,6 +493,10 @@ export default {
             headerName: "折扣额",
             width: 90,
             field: "dsc",
+            headerComponent: "allowance",
+            headerComponentParams: {
+              dispose: { title: "折扣额", key: "dsc" },
+            },
             hide: true,
             dispose: true,
           },

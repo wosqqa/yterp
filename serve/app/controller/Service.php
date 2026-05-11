@@ -78,6 +78,7 @@ class Service extends Acl {
         if (existFull($input,['page','limit'])) {
             $dataText = existFull($input,['data']) ? trim(strval($input['data'])) : '';
             $setOrderMode = $dataText !== '' && preg_match('/^set/i', $dataText);
+            $sort = existFull($input,['sort']) ? trim(strval($input['sort'])) : '';
             $sqlInput = $input;
             if ($setOrderMode) {
                 unset($sqlInput['data']);
@@ -136,6 +137,8 @@ class Service extends Acl {
             $query = $query->append(['extension'])->page($input['page'],$input['limit']);
             if ($setOrderMode) {
                 $query = $query->orderRaw('CAST(SUBSTRING(data, 4) AS UNSIGNED) ASC, id DESC');
+            } elseif ($sort === 'numberAsc') {
+                $query = $query->orderRaw("CASE WHEN `number` REGEXP '^[0-9]+' THEN 0 WHEN `number` REGEXP '^[sS][0-9]+' THEN 1 ELSE 2 END ASC, CASE WHEN `number` REGEXP '^[0-9]+' THEN CAST(`number` AS UNSIGNED) WHEN `number` REGEXP '^[sS][0-9]+' THEN CAST(SUBSTRING(`number`, 2) AS UNSIGNED) ELSE 999999999 END ASC, `number` ASC, id DESC");
             } else {
                 $query = $query->order(['id'=>'desc']);
             }

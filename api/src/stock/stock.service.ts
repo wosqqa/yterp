@@ -74,7 +74,7 @@ export class StockService {
   }
 
   async record(body: any) {
-    const { page, limit, warehouse, state, category, code, name, number, spec, brand } = body || {};
+    const { page, limit, warehouse, state, category, code, name, number, spec, brand, sort } = body || {};
     if (
       page === undefined ||
       limit === undefined ||
@@ -122,8 +122,10 @@ export class StockService {
       }
     }
     const stateNum = Number(state);
+    const sortKey = String(sort || '');
+    let roomRowsForAllGoods: Array<{ goods: number; nums: any }> = [];
     if (stateNum === 1 || stateNum === 2) {
-      const roomRows = warehouseIds.length
+      roomRowsForAllGoods = warehouseIds.length
         ? await this.prisma.room.findMany({
             where: {
               warehouse: { in: warehouseIds },
@@ -134,17 +136,36 @@ export class StockService {
         : [];
       if (stateNum === 1) {
         const keepIds = new Set(
-          roomRows.filter((r) => this.toNum(r.nums) !== 0).map((r) => r.goods),
+          roomRowsForAllGoods.filter((r) => this.toNum(r.nums) !== 0).map((r) => r.goods),
         );
         mainGoods = mainGoods.filter((g) => keepIds.has(g.id));
       } else {
         const stockMap = new Map(mainGoods.map((g) => [g.id, this.toNum(g.stock)]));
         const keepIds = new Set<number>();
-        for (const r of roomRows) {
+        for (const r of roomRowsForAllGoods) {
           if (this.toNum(r.nums) <= (stockMap.get(r.goods) ?? 0)) keepIds.add(r.goods);
         }
         mainGoods = mainGoods.filter((g) => keepIds.has(g.id));
       }
+    }
+
+    if (sortKey === 'stockAsc') {
+      if (roomRowsForAllGoods.length === 0 && warehouseIds.length && mainGoods.length) {
+        roomRowsForAllGoods = await this.prisma.room.findMany({
+          where: { warehouse: { in: warehouseIds }, goods: { in: mainGoods.map((g) => g.id) } },
+          select: { goods: true, nums: true },
+        });
+      }
+      const totalMap = new Map<number, number>();
+      for (const r of roomRowsForAllGoods) {
+        totalMap.set(r.goods, this.add(totalMap.get(r.goods) || 0, this.toNum(r.nums)));
+      }
+      mainGoods = mainGoods.sort((a, b) => {
+        const av = totalMap.get(a.id) ?? 0;
+        const bv = totalMap.get(b.id) ?? 0;
+        if (av !== bv) return av - bv;
+        return b.id - a.id;
+      });
     }
     const count = mainGoods.length;
     const start = (Number(page) - 1) * Number(limit);

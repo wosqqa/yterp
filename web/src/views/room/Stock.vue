@@ -205,7 +205,8 @@
 				page==0||(this.page.current=page);
 				let parm = Object.assign({
 					page: this.page.current,
-					limit: this.page.size
+					limit: this.page.size,
+					sort: "stockAsc"
 				}, this.searchFrom);
 				this.$axios.post("stock/record", parm).then(result => {
 					if (result.state == "success") {

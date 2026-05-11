@@ -22,7 +22,6 @@ export class MainService {
     // PHP sqlAuth 逻辑比较复杂，这里先应用 frame 过滤
     const commonWhere = {
       ...frameFilter,
-      examine: true, // 1: 已审核
     };
 
     for (const v of ['today', 'yesterday']) {
@@ -38,15 +37,15 @@ export class MainService {
 
       // Sell
       const sellAgg = await this.prisma.sell.aggregate({
-        where: { ...commonWhere, ...timeWhere },
+        where: { ...commonWhere, ...timeWhere, examine: 1 },
         _sum: { actual: true },
       });
       const sellIds = await this.prisma.sell.findMany({
-        where: { ...commonWhere, ...timeWhere },
+        where: { ...commonWhere, ...timeWhere, examine: 1 },
         select: { id: true },
       });
       group[v]['sell'] = {
-        actual: sellAgg._sum.actual || 0,
+        actual: sellAgg._sum?.actual || 0,
         id: sellIds.map((item) => item.id).join(','),
         count: sellIds.length,
         idsArr: sellIds.map((item) => item.id),
@@ -54,17 +53,17 @@ export class MainService {
 
       // Imy
       const imyAgg = await this.prisma.imy.aggregate({
-        where: { ...commonWhere, ...timeWhere },
+        where: { ...commonWhere, ...timeWhere, examine: true },
         _sum: { total: true },
       });
-      group[v]['imy'] = { total: imyAgg._sum.total || 0 };
+      group[v]['imy'] = { total: imyAgg._sum?.total || 0 };
 
       // Ice
       const iceAgg = await this.prisma.ice.aggregate({
-        where: { ...commonWhere, ...timeWhere },
+        where: { ...commonWhere, ...timeWhere, examine: true },
         _sum: { actual: true },
       });
-      group[v]['ice'] = { actual: iceAgg._sum.actual || 0 };
+      group[v]['ice'] = { actual: iceAgg._sum?.actual || 0 };
     }
 
     const lattice: any = {};

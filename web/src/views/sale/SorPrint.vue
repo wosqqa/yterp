@@ -1,5 +1,9 @@
 <template>
   <div class="sorPrint">
+    <div class="floatTools">
+      <el-button size="mini" @click="toggleImgQty">{{ imgQtyHidden ? "显示数量" : "隐藏数量" }}</el-button>
+      <el-button size="mini" @click="toggleUnitPrice">{{ unitPriceHidden ? "显示单价" : "隐藏单价" }}</el-button>
+    </div>
     <div class="switchBar">
       <el-button-group>
         <el-button size="mini" :type="groupBy === 'category' ? 'primary' : 'info'" @click="groupBy = 'category'"
@@ -16,6 +20,7 @@
         >
       </el-button-group>
       <el-button-group>
+        <el-button size="mini" type="success" @click="exportXlsx">导出XLSX</el-button>
         <el-button size="mini" type="primary" @click="openPdfPreview">PDF预览</el-button>
       </el-button-group>
     </div>
@@ -92,8 +97,10 @@
             <div class="en">TT QTY</div>
           </div>
           <div class="td price">
-            <div>单价</div>
-            <div class="en">U/PRICE</div>
+            <div class="uPriceHead" :style="{ visibility: unitPriceHidden ? 'hidden' : 'visible' }">
+              <div>单价</div>
+              <div class="en">U/PRICE</div>
+            </div>
           </div>
           <div class="td amount">
             <div>总金额</div>
@@ -114,14 +121,16 @@
                 <div class="imgBox">
                   <img v-if="img.url" :src="img.url" />
                 </div>
-                <div class="imgQty">{{ img.qty }}</div>
+                <div class="imgQty" :hidden="imgQtyHidden">{{ img.qty }}</div>
               </div>
             </div>
           </div>
           <div class="td qty big">{{ row.ttQty }}</div>
           <div class="td price big">
-            <template v-if="groupBy === 'combo'">{{ row.uPriceText }}</template>
-            <template v-else>{{ row.uPrice }}</template>
+            <div class="uPriceCell" :style="{ visibility: unitPriceHidden ? 'hidden' : 'visible' }">
+              <template v-if="groupBy === 'combo'">{{ row.uPriceText }}</template>
+              <template v-else>{{ row.uPrice }}</template>
+            </div>
           </div>
           <div class="td amount big">￥{{ row.amount }}</div>
           <div class="td usd big">${{ row.usd }}</div>
@@ -194,6 +203,8 @@ export default {
       exchangeRate: 6.85,
       freightManual: 30,
       depositManual: 0,
+      imgQtyHidden: false,
+      unitPriceHidden: false,
       groupBy: "category",
       customerInfo: {
         name: "",
@@ -600,6 +611,104 @@ export default {
       win.document.close();
       win.document.title = fileNameTitle;
     },
+    toggleImgQty() {
+      this.imgQtyHidden = !this.imgQtyHidden;
+      try {
+        [...document.getElementsByClassName("imgQty")].forEach(el => (el.hidden = this.imgQtyHidden));
+      } catch (e) {}
+    },
+    toggleUnitPrice() {
+      this.unitPriceHidden = !this.unitPriceHidden;
+      const next = this.unitPriceHidden ? "hidden" : "visible";
+      try {
+        [...document.getElementsByClassName("uPriceHead")].forEach(el => (el.style.visibility = next));
+        [...document.getElementsByClassName("uPriceCell")].forEach(el => (el.style.visibility = next));
+      } catch (e) {}
+    },
+    exportXlsx() {
+      if (!this.source) return;
+      const mmdd = this.$moment ? this.$moment().format("MMDD") : "";
+      const titleName = this.customerName ? String(this.customerName).trim() : "";
+      const rawName = `${mmdd}${mmdd && titleName ? " " : ""}${titleName}`.trim() || "Sales orders";
+      const fileName = (rawName.replace(/[\\/:*?"<>|]/g, "_") + ".xlsx").trim();
+
+      const rows = (this.rows || []).map(r => {
+        const pics = Array.isArray(r && r.pics)
+          ? r.pics
+              .map(p => {
+                return {
+                  url: p && p.url ? String(p.url) : "",
+                  qty: p && p.qty != null ? p.qty : ""
+                };
+              })
+              .filter(p => p && p.url)
+          : [];
+        return {
+          no: r && r.no != null ? r.no : "",
+          desc: r && r.desc != null ? String(r.desc) : "",
+          ttQty: r && r.ttQty != null ? Number(r.ttQty) : 0,
+          uPrice: r && r.uPrice != null ? String(r.uPrice) : "",
+          uPriceText: r && r.uPriceText != null ? String(r.uPriceText) : "",
+          amount: r && r.amount != null ? String(r.amount) : "",
+          usd: r && r.usd != null ? String(r.usd) : "",
+          pics
+        };
+      });
+
+      this.$axios({
+        url: "service/exportXlsx",
+        method: "post",
+        data: {
+          template: "sorPrint",
+          fileName,
+          sheetName: "Order",
+          payload: {
+            groupBy: this.groupBy,
+            exchangeRate: this.exchangeRate,
+            customerName: this.customerName || "",
+            customerAdd: this.customerAdd || "",
+            customerMark: this.customerMark || "",
+            orderDate: this.orderDateDisplay || "",
+            deliveryDate: this.deliveryDateDisplay || "",
+            number: this.classData.number || "",
+            freight: this.freightVal,
+            deposit: this.depositVal,
+            totalQty: this.totalQty,
+            totalRmb: this.totalRmbVal,
+            totalUsd: this.exchangeRate ? this.totalRmbVal / this.exchangeRate : 0,
+            totalWithFreight: this.totalWithFreightVal,
+            balance: this.balanceVal,
+            rows
+          }
+        },
+        responseType: "blob"
+      }).then(blob => {
+        if (!blob) return;
+        const isJson = blob && blob.type && /application\/json/i.test(blob.type);
+        if (isJson) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            try {
+              const obj = JSON.parse(String(reader.result || "{}"));
+              this.$message && this.$message({ type: "warning", message: obj.info || "导出失败!" });
+            } catch (e) {
+              this.$message && this.$message({ type: "warning", message: "导出失败!" });
+            }
+          };
+          reader.readAsText(blob);
+          return;
+        }
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.style.display = "none";
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      });
+    },
     formatDate(val) {
       if (!val) return "";
       const m = this.$moment ? this.$moment(val) : null;
@@ -780,6 +889,15 @@ export default {
 </script>
 
 <style scoped>
+.floatTools {
+  position: fixed;
+  right: 18px;
+  top: 140px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .sorPrint {
   padding: 12px;
   background: #f5f5f5;
