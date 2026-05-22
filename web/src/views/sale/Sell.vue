@@ -33,7 +33,11 @@
           placeholder="请输入单据编号"
           v-model="form.number"
           clearable
-        ></el-input>
+        >
+          <template slot="append" v-if="form.id != 0 && $lib.getUserRoot(store.root, 'sell', 'add')">
+            <el-button icon="el-icon-document-copy" @click="copyAsNew"></el-button>
+          </template>
+        </el-input>
       </el-form-item>
       <el-divider class="fistDivider"></el-divider>
       <ag-grid-vue
@@ -143,11 +147,11 @@
           "
         >
           <el-button type="info" @click="goodsViewOpen">视图</el-button>
-          <el-button type="info" @click="togglePics">{{
-            picVisible ? "隐藏图片" : "图片"
-          }}</el-button>
           <el-button type="info" @click="save">保存</el-button>
         </template>
+        <el-button type="info" @click="togglePics">{{
+          picVisible ? "隐藏图片" : "图片"
+        }}</el-button>
         <template v-if="form.id != 0">
           <template
             v-if="
@@ -505,6 +509,10 @@ export default {
             headerName: "数量",
             width: 90,
             field: "nums",
+            headerComponent: "allowance",
+            headerComponentParams: {
+              dispose: { title: "数量", key: "numsDelta" },
+            },
             editable: true,
             cellEditor: "serial",
             cellEditorParams: {
@@ -907,6 +915,111 @@ export default {
             type: "warning",
             message: message,
           });
+        });
+    },
+    copyAsNew() {
+      const form = this.$refs["form"];
+      const api = this.grid && this.grid.options ? this.grid.options.api : null;
+      api && api.stopEditing && api.stopEditing();
+      this.$lib
+        .aloneValidate(form, ["customer", "time"])
+        .then(() => {
+          const effect = this.handleGrid();
+          if (effect !== true) {
+            this.$message({ type: "warning", message: effect });
+            return;
+          }
+          if (this.info.length === 0) {
+            this.$message({ type: "warning", message: "商品信息不可为空!" });
+            return;
+          }
+          this.$lib
+            .aloneValidate(form, ["actual", "money"])
+            .then(() => {
+              if (this.form.actual - 0 > this.form.total - 0) {
+                this.$message({ type: "warning", message: "实际金额不可大于单据金额!" });
+                return;
+              }
+              if (this.form.money - 0 > this.form.actual - 0) {
+                this.$message({ type: "warning", message: "实收金额不可大于实际金额!" });
+                return;
+              }
+              if (this.form.money != 0 && this.form.account == null) {
+                this.$message({ type: "warning", message: "结算账户不可为空!" });
+                return;
+              }
+
+              const check = this.handleCost();
+              if (check !== true) {
+                this.$message({ type: "warning", message: check });
+                return;
+              }
+
+              form.validate((valid) => {
+                if (!valid) {
+                  this.$message({ type: "warning", message: "表单验证错误,请检查并修正!" });
+                  return;
+                }
+
+                const nextNumber = "XSD" + this.$moment().format("YYMMDDHHmmssS");
+                const classCopy = this.$lib.extend(true, {}, this.form);
+                classCopy.id = 0;
+                classCopy.source = 0;
+                classCopy.examine = 0;
+                classCopy.check = 0;
+                classCopy.number = nextNumber;
+                classCopy.time = classCopy.time || this.$moment().format("YYYY-MM-DD");
+
+                [
+                  "frameData",
+                  "customerData",
+                  "peopleData",
+                  "userData",
+                  "recordData",
+                  "relation",
+                  "extension",
+                ].forEach((k) => {
+                  classCopy[k] != null && delete classCopy[k];
+                });
+
+                const infoCopy = (this.info || []).map((it) => Object.assign({}, it));
+                const costCopy = (this.cost || []).map((it) => Object.assign({}, it));
+
+                this.$axios
+                  .post("sell/save", {
+                    class: classCopy,
+                    info: infoCopy,
+                    cost: costCopy,
+                  })
+                  .then((result) => {
+                    if (result.state == "success") {
+                      const newId = result.info;
+                      this.$set(this, "form", Object.assign({}, classCopy, { id: newId }));
+                      this.$set(this, "cost", costCopy);
+                      this.$message({
+                        type: "success",
+                        message: "复制成功,新单编号: " + nextNumber,
+                      });
+                      if (this.store.sys.fun.examine) {
+                        this.$message({ type: "success", message: "审核单据中..." });
+                        setTimeout(() => {
+                          this.examine();
+                        }, 996);
+                      }
+                    } else if (result.state == "error") {
+                      this.$message({ type: "warning", message: result.info });
+                    } else {
+                      this.$message({ type: "error", message: "[ ERROR ] 服务器响应超时!" });
+                    }
+                  });
+              });
+            })
+            .catch((message) => {
+              this.$message({ type: "warning", message: message });
+            });
+        })
+        .catch((message) => {
+          this.$message({ type: "warning", message: message });
         });
     },
     //审核|反审核

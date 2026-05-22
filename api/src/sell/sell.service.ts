@@ -396,15 +396,19 @@ export class SellService {
             },
           });
           await prisma.sellInfo.deleteMany({ where: { pid: id } });
-          for (const info of sellInfos) {
-            await prisma.sellInfo.create({
-              data: { ...info, pid: id, mfd: toMfd((info as any).mfd) },
+          if (sellInfos.length) {
+            await prisma.sellInfo.createMany({
+              data: sellInfos.map((info: any) => {
+                return { ...info, pid: id, mfd: toMfd(info && (info as any).mfd) };
+              }),
             });
           }
           await prisma.cost.deleteMany({ where: { type: 'sell', class: id } });
-          for (const c of sellCosts) {
-            await prisma.cost.create({
-              data: { ...c, class: id },
+          if (sellCosts.length) {
+            await prisma.cost.createMany({
+              data: sellCosts.map((c: any) => {
+                return { ...c, class: id };
+              }),
             });
           }
           await prisma.record.create({
@@ -424,14 +428,18 @@ export class SellService {
             },
           });
           sellId = created.id;
-          for (const info of sellInfos) {
-            await prisma.sellInfo.create({
-              data: { ...info, pid: created.id, mfd: toMfd((info as any).mfd) },
+          if (sellInfos.length) {
+            await prisma.sellInfo.createMany({
+              data: sellInfos.map((info: any) => {
+                return { ...info, pid: created.id, mfd: toMfd(info && (info as any).mfd) };
+              }),
             });
           }
-          for (const c of sellCosts) {
-            await prisma.cost.create({
-              data: { ...c, class: created.id },
+          if (sellCosts.length) {
+            await prisma.cost.createMany({
+              data: sellCosts.map((c: any) => {
+                return { ...c, class: created.id };
+              }),
             });
           }
           await prisma.record.create({

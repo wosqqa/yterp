@@ -3,6 +3,11 @@ module.exports = {
     assetsDir: 'static',
     filenameHashing: false,
     productionSourceMap: false,
+    devServer: {
+        host: '0.0.0.0',
+        port: 8083,
+        disableHostCheck: true
+    },
     configureWebpack: {
         resolve: {
             alias: {

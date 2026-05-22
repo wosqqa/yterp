@@ -464,6 +464,11 @@
             <el-button @click="billShow(scope.row.id)" size="mini"
               >详情</el-button
             >
+            <template v-if="$lib.getUserRoot(store.root, 'sell', 'add')">
+              <el-button @click="copyBill(scope.row.id)" size="mini"
+                >复制</el-button
+              >
+            </template>
             <template v-if="$lib.getUserRoot(store.root, 'sell', 'del')">
               <el-button @click="del([scope.row.id])" size="mini"
                 >删除</el-button
@@ -732,6 +737,65 @@ export default {
     billShow(id) {
       this.bill.source = id;
       this.bill.dialog = true;
+    },
+    copyBill(id) {
+      if (!id) return;
+      this.$axios.post("sell/get", { parm: id }).then((result) => {
+        if (result.state == "success") {
+          const nextNumber = "XSD" + this.$moment().format("YYMMDDHHmmssS");
+          const raw = result.info || {};
+          const classCopy = this.$lib.extend(true, {}, raw.class || {});
+          classCopy.id = 0;
+          classCopy.source = 0;
+          classCopy.examine = 0;
+          classCopy.check = 0;
+          classCopy.number = nextNumber;
+          classCopy.time = classCopy.time || this.$moment().format("YYYY-MM-DD");
+
+          [
+            "frameData",
+            "customerData",
+            "peopleData",
+            "userData",
+            "recordData",
+            "relation",
+            "extension",
+            "billData",
+            "costData",
+            "invoiceData",
+          ].forEach((k) => {
+            classCopy[k] != null && delete classCopy[k];
+          });
+
+          const infoCopy = Array.isArray(raw.info) ? raw.info.map((it) => Object.assign({}, it)) : [];
+          const costCopy = Array.isArray(raw.cost) ? raw.cost.map((it) => Object.assign({}, it)) : [];
+
+          this.$axios
+            .post("sell/save", {
+              class: classCopy,
+              info: infoCopy,
+              cost: costCopy,
+            })
+            .then((res) => {
+              if (res.state == "success") {
+                this.record(0);
+                this.$message({
+                  type: "success",
+                  message: "复制成功,新单编号: " + nextNumber,
+                });
+                this.billShow(res.info);
+              } else if (res.state == "error") {
+                this.$message({ type: "warning", message: res.info });
+              } else {
+                this.$message({ type: "error", message: "[ ERROR ] 服务器响应超时!" });
+              }
+            });
+        } else if (result.state == "error") {
+          this.$message({ type: "warning", message: result.info });
+        } else {
+          this.$message({ type: "error", message: "[ ERROR ] 服务器响应超时!" });
+        }
+      });
     },
     //单据关闭
     billDestroy() {

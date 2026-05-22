@@ -143,11 +143,11 @@
           "
         >
           <el-button type="info" @click="goodsViewOpen">视图</el-button>
-          <el-button type="info" @click="togglePics">{{
-            picVisible ? "隐藏图片" : "图片"
-          }}</el-button>
           <el-button type="info" @click="save">保存</el-button>
         </template>
+        <el-button type="info" @click="togglePics">{{
+          picVisible ? "隐藏图片" : "图片"
+        }}</el-button>
         <template v-if="form.id != 0">
           <template
             v-if="

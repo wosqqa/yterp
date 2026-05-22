@@ -28,7 +28,7 @@
         created(){
 			this.title=this.params.dispose.title;
 			const key=this.params && this.params.dispose ? this.params.dispose.key : '';
-			this.placeholder=key==='priceDelta' ? '输入增减值，如 2 或 -2' : this.title;
+			this.placeholder=(key==='priceDelta' || key==='numsDelta') ? '输入增减值，如 2 或 -2' : this.title;
         },
         methods:{
 			save(){
@@ -111,6 +111,42 @@
 					this.$message({
 						type: "success",
 						message: "批量设置完成!"
+					});
+					return;
+				}
+				if(key==='numsDelta'){
+					const n=Number(String(this.value==null?'':this.value).replace(/,/g,''));
+					if(!Number.isFinite(n)){
+						this.$message({
+							type: "warning",
+							message: "数量格式不正确!"
+						});
+						return;
+					}
+					const delta=n;
+					let applied=0;
+					let skipped=0;
+					this.params.api.forEachNode((node) => {
+						if(node.data.key!=null){
+							if(node.data.serialType){
+								skipped++;
+								return;
+							}
+							const cur=Number(node.data.nums);
+							const base=Number.isFinite(cur)?cur:0;
+							let next=this.$calc.chain(base).add(delta).done();
+							next = Number.isFinite(next) ? next : base;
+							next = Math.max(0, next);
+							next = this.$calc.chain(next).round(4).done();
+							this.$grid.updateGridData(this.params,node.data.uniqid,'nums',next);
+							applied++;
+						}
+					});
+					this.params.context.runHandleGrid();
+					this.$refs.popover.showPopper=false;
+					this.$message({
+						type: "success",
+						message: skipped>0 ? `批量设置完成! 已更新 ${applied} 行，跳过 ${skipped} 行（序列号商品）` : "批量设置完成!"
 					});
 					return;
 				}

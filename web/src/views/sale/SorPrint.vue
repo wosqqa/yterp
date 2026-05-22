@@ -6,17 +6,22 @@
     </div>
     <div class="switchBar">
       <el-button-group>
-        <el-button size="mini" :type="groupBy === 'category' ? 'primary' : 'info'" @click="groupBy = 'category'"
+        <el-button size="mini" :type="groupBy === 'category' ? 'primary' : 'info'" @click="setGroupBy('category')"
           >产品分类</el-button
         >
-        <el-button size="mini" :type="groupBy === 'warehouse' ? 'primary' : 'info'" @click="groupBy = 'warehouse'"
+        <el-button size="mini" :type="groupBy === 'warehouse' ? 'primary' : 'info'" @click="setGroupBy('warehouse')"
           >仓库分类</el-button
         >
-        <el-button size="mini" :type="groupBy === 'pack' ? 'primary' : 'info'" @click="groupBy = 'pack'"
+        <el-button size="mini" :type="groupBy === 'pack' ? 'primary' : 'info'" @click="setGroupBy('pack')"
           >装箱分类</el-button
         >
-        <el-button size="mini" :type="groupBy === 'combo' ? 'primary' : 'info'" @click="groupBy = 'combo'"
+        <el-button size="mini" :type="groupBy === 'combo' ? 'primary' : 'info'" @click="setGroupBy('combo')"
           >组合分类</el-button
+        >
+      </el-button-group>
+      <el-button-group>
+        <el-button size="mini" :type="headerMode === 'invoice' ? 'primary' : 'info'" @click="enterInvoice"
+          >商业发票</el-button
         >
       </el-button-group>
       <el-button-group>
@@ -24,8 +29,8 @@
         <el-button size="mini" type="primary" @click="openPdfPreview">PDF预览</el-button>
       </el-button-group>
     </div>
-    <div class="paper" :class="{ comboMode: groupBy === 'combo' }">
-      <div class="header">
+    <div class="paper" :class="{ comboMode: groupBy === 'combo', invoiceMode: headerMode === 'invoice' }">
+      <div v-if="headerMode !== 'invoice'" class="header">
         <div class="headerLeft">
           <div class="brandRow">
             <div class="brand">Kim Bags</div>
@@ -54,7 +59,59 @@
         </div>
       </div>
 
-      <div class="meta">
+      <div v-if="headerMode === 'invoice'" class="invoiceHeader">
+        <div class="invoiceGrid">
+          <div class="invoiceCell invoiceSellerCell">
+            <div class="invoiceLabel">Seller</div>
+            <el-input
+              class="invoiceInput"
+              type="textarea"
+              :autosize="{ minRows: 3, maxRows: 7 }"
+              :value="invoiceSeller"
+              @input="onInvoiceSellerInput"
+            ></el-input>
+            <div class="invoicePrintText">{{ invoiceSeller }}</div>
+          </div>
+
+          <div class="invoiceCell invoiceTitleCell">
+            <div class="invoiceTitle">COMMERCIAL INVOICE</div>
+          </div>
+
+          <div class="invoiceCell invoiceToCell">
+            <div class="invoiceLabel">To</div>
+            <el-input
+              class="invoiceInput"
+              type="textarea"
+              :autosize="{ minRows: 3, maxRows: 7 }"
+              :value="invoiceTo"
+              @input="onInvoiceToInput"
+            ></el-input>
+            <div class="invoicePrintText">{{ invoiceTo }}</div>
+          </div>
+
+          <div class="invoiceCell invoiceNoteCell">Including freight within China</div>
+
+          <div class="invoiceCell invoiceNoDateCell">
+            <div class="invoiceNoDateRow">
+              <div class="invoiceNoDateItem">
+                <span class="invoiceMetaLabel">No.:</span>
+                <span class="invoiceMetaVal">{{ classData.number }}</span>
+              </div>
+              <div class="invoiceNoDateItem">
+                <span class="invoiceMetaLabel">Date:</span>
+                <span class="invoiceMetaVal">{{ orderDateDisplay }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="invoiceCell invoiceAgreementCell">
+            The soler agrees to sell and buyer agrees to buy the undermentioned goods on the terms and conditions
+            statedbelow.
+          </div>
+        </div>
+      </div>
+
+      <div v-if="headerMode !== 'invoice'" class="meta">
         <div class="metaRow">
           <div class="metaCol">
             CUSTOMER：<span class="metaVal">{{ customerName }}</span>
@@ -155,7 +212,38 @@
         </div>
       </div>
 
-      <div class="summary">
+      <div v-if="headerMode === 'invoice'" class="invoiceFooter">
+        <div class="invoiceFooterBox">
+          <div class="invoiceFooterTable">
+            <div class="invoiceFooterCell invoiceFooterLabel">Total:</div>
+            <div class="invoiceFooterCell invoiceFooterVal">
+              <el-input class="invoiceInput" :value="invoiceTotalText" @input="onInvoiceTotalInput"></el-input>
+              <div class="invoicePrintText">{{ invoiceTotalText }}</div>
+            </div>
+            <div class="invoiceFooterCell invoiceFooterLabel">Total Amount in Words:</div>
+            <div class="invoiceFooterCell invoiceFooterVal">
+              <el-input class="invoiceInput" :value="invoiceWordsText" @input="onInvoiceWordsInput"></el-input>
+              <div class="invoicePrintText">{{ invoiceWordsText }}</div>
+            </div>
+          </div>
+          <div class="invoiceFooterTerms">
+            <div>1.delivery time:delivery one week after payment.</div>
+            <div>2.payment terms:50% TT in advance,and the balanced should be paid before shipping</div>
+          </div>
+          <div class="invoiceFooterBank">
+            <el-input
+              class="invoiceInput"
+              type="textarea"
+              :autosize="{ minRows: 5, maxRows: 10 }"
+              :value="invoiceBankText"
+              @input="onInvoiceBankInput"
+            ></el-input>
+            <div class="invoicePrintText">{{ invoiceBankText }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="headerMode !== 'invoice'" class="summary">
         <div class="sumLeft">
           <div class="sumTitle">NOTE：</div>
         </div>
@@ -200,6 +288,13 @@ export default {
   },
   data() {
     return {
+      headerMode: "order",
+      invoiceSeller: "",
+      invoiceTo: "",
+      invoiceTotalText: "",
+      invoiceWordsText: "",
+      invoiceBankText: "",
+      invoiceSaveTimer: null,
       exchangeRate: 6.85,
       freightManual: 30,
       depositManual: 0,
@@ -222,6 +317,7 @@ export default {
     };
   },
   created() {
+    this.loadInvoiceDraft();
     this.load();
   },
   watch: {
@@ -347,7 +443,7 @@ export default {
             ? pics
                 .map(p => (row.priceByPicKey && row.priceByPicKey[p.picKey] ? row.priceByPicKey[p.picKey] : ""))
                 .filter(v => v)
-                .join("+")
+                .join(" + ")
             : "";
         return {
           key: row.key,
@@ -516,6 +612,120 @@ export default {
     }
   },
   methods: {
+    setGroupBy(val) {
+      this.groupBy = val;
+      this.headerMode = "order";
+    },
+    enterInvoice() {
+      this.headerMode = "invoice";
+      this.ensureInvoiceDefaults();
+    },
+    getInvoiceKey(part) {
+      return "sorPrint:commercialInvoice:" + String(part || "");
+    },
+    loadInvoiceDraft() {
+      try {
+        const seller = localStorage.getItem(this.getInvoiceKey("seller"));
+        const to = localStorage.getItem(this.getInvoiceKey("to"));
+        const totalText = localStorage.getItem(this.getInvoiceKey("totalText"));
+        const wordsText = localStorage.getItem(this.getInvoiceKey("wordsText"));
+        const bankText = localStorage.getItem(this.getInvoiceKey("bankText"));
+        this.invoiceSeller = seller != null ? seller : "";
+        this.invoiceTo = to != null ? to : "";
+        this.invoiceTotalText = totalText != null ? totalText : "";
+        this.invoiceWordsText = wordsText != null ? wordsText : "";
+        this.invoiceBankText = bankText != null ? bankText : "";
+      } catch (e) {
+        this.invoiceSeller = "";
+        this.invoiceTo = "";
+        this.invoiceTotalText = "";
+        this.invoiceWordsText = "";
+        this.invoiceBankText = "";
+      }
+    },
+    persistInvoiceDraft() {
+      try {
+        localStorage.setItem(this.getInvoiceKey("seller"), this.invoiceSeller || "");
+        localStorage.setItem(this.getInvoiceKey("to"), this.invoiceTo || "");
+        localStorage.setItem(this.getInvoiceKey("totalText"), this.invoiceTotalText || "");
+        localStorage.setItem(this.getInvoiceKey("wordsText"), this.invoiceWordsText || "");
+        localStorage.setItem(this.getInvoiceKey("bankText"), this.invoiceBankText || "");
+      } catch (e) {}
+    },
+    persistInvoiceDraftDebounced() {
+      this.invoiceSaveTimer && clearTimeout(this.invoiceSaveTimer);
+      this.invoiceSaveTimer = setTimeout(() => {
+        this.persistInvoiceDraft();
+      }, 200);
+    },
+    getDefaultInvoiceSeller() {
+      return [
+        "XiYue Bags",
+        "+8619535838073",
+        "ADD：No. 783, 207 Gallery, Second Floor, East Second District, Shaodong International Business City",
+        "City：Shaodong City, Hunan Province",
+        "EMAIL：kimbagfactory@outlook.com"
+      ].join("\n");
+    },
+    getDefaultInvoiceTo() {
+      const parts = [];
+      this.customerName && parts.push(this.customerName);
+      this.customerAdd && parts.push(this.customerAdd);
+      this.customerMark && parts.push(this.customerMark);
+      return parts.join("\n");
+    },
+    getDefaultInvoiceTotalText() {
+      const totalRmb = this.formatMoney(this.totalRmbVal, 2);
+      const freight = this.formatMoney(this.freightVal, 2);
+      const total = this.formatMoney(this.totalWithFreightVal, 2);
+      return "Motor cost add shipping cost " + totalRmb + "RMB+" + freight + "RMB=" + total + "RMB";
+    },
+    getDefaultInvoiceWordsText() {
+      return "SAY RMB SEVEN THOUSAND THREE HUNDRED ONLY.";
+    },
+    getDefaultInvoiceBankText() {
+      return [
+        "NAME OF OUR AUTHORISED BENEFICIARY AND BANK AS BELOW:",
+        "Beneficiary name: Shaodong XiYue Luggage company",
+        "Beneficiary bank: DBS Bank (Hong Kong) Limited",
+        "Beneficiary account number: 7996000652695",
+        "Beneficiary bank address: 11th Floor, The Center, 99 Queen's Road Central, Central, Hong Kong",
+        "Beneficiary bank swift code: DHBKKHH"
+      ].join("\n");
+    },
+    ensureInvoiceDefaults() {
+      const seller = String(this.invoiceSeller || "").trim();
+      const to = String(this.invoiceTo || "").trim();
+      if (!seller) this.invoiceSeller = this.getDefaultInvoiceSeller();
+      if (!to) this.invoiceTo = this.getDefaultInvoiceTo();
+      const totalText = String(this.invoiceTotalText || "").trim();
+      const wordsText = String(this.invoiceWordsText || "").trim();
+      const bankText = String(this.invoiceBankText || "").trim();
+      if (!totalText) this.invoiceTotalText = this.getDefaultInvoiceTotalText();
+      if (!wordsText) this.invoiceWordsText = this.getDefaultInvoiceWordsText();
+      if (!bankText) this.invoiceBankText = this.getDefaultInvoiceBankText();
+      this.persistInvoiceDraftDebounced();
+    },
+    onInvoiceSellerInput(val) {
+      this.invoiceSeller = val;
+      this.persistInvoiceDraftDebounced();
+    },
+    onInvoiceToInput(val) {
+      this.invoiceTo = val;
+      this.persistInvoiceDraftDebounced();
+    },
+    onInvoiceTotalInput(val) {
+      this.invoiceTotalText = val;
+      this.persistInvoiceDraftDebounced();
+    },
+    onInvoiceWordsInput(val) {
+      this.invoiceWordsText = val;
+      this.persistInvoiceDraftDebounced();
+    },
+    onInvoiceBankInput(val) {
+      this.invoiceBankText = val;
+      this.persistInvoiceDraftDebounced();
+    },
     escapeHtml(val) {
       const s = val == null ? "" : String(val);
       return s
@@ -582,6 +792,8 @@ export default {
       .pdfTitle{ font-size: 13px; color: #303133; font-weight: 600; margin-right: 6px; }
       .pdfTip{ color: #909399; font-size: 12px; margin-left: auto; }
       .pdfPreviewBody{ padding: 12px; }
+      .pdfPreviewBody .invoiceInput{ display:none !important; }
+      .pdfPreviewBody .invoicePrintText{ display:block !important; }
 
       @media print {
         @page { size: A4; margin: 10mm; }
@@ -754,15 +966,18 @@ export default {
         add: main.add || "",
         data: main.data || customer.data || ""
       };
+      this.headerMode === "invoice" && this.ensureInvoiceDefaults();
     },
     fetchCustomerInfo(customerId) {
       if (!customerId) {
         this.customerInfo = { name: "", add: "", data: "" };
+        this.headerMode === "invoice" && this.ensureInvoiceDefaults();
         return Promise.resolve(true);
       }
       return this.$axios.post("customer/get", { id: customerId }).then(res => {
         if (!res || res.state !== "success") {
           this.customerInfo = { name: "", add: "", data: "" };
+          this.headerMode === "invoice" && this.ensureInvoiceDefaults();
           return true;
         }
         this.setCustomerInfoFromCustomerData(res.info);
@@ -916,6 +1131,9 @@ export default {
   background: #fff;
   border: 1px solid #dcdfe6;
 }
+.paper.invoiceMode {
+  border-color: #333;
+}
 .comboWrap {
   padding: 12px 12px 18px 12px;
 }
@@ -1016,6 +1234,191 @@ export default {
   font-size: 12px;
   margin-top: 4px;
 }
+.invoiceHeader {
+  border-bottom: 0;
+}
+.invoiceGrid {
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  grid-template-rows: auto auto auto auto;
+}
+.invoiceCell {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #303133;
+}
+.invoiceSellerCell {
+  grid-column: 1;
+  grid-row: 1;
+  border-right: 1px solid #333;
+  border-bottom: 1px solid #333;
+  min-height: 78px;
+}
+.invoiceToCell {
+  grid-column: 1;
+  grid-row: 2;
+  border-right: 1px solid #333;
+  border-bottom: 1px solid #333;
+  min-height: 58px;
+}
+.invoiceTitleCell {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  border-bottom: 1px solid #333;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.invoiceNoteCell {
+  grid-column: 1;
+  grid-row: 3;
+  border-right: 1px solid #333;
+  border-bottom: 1px solid #333;
+  padding: 6px 10px;
+  line-height: 16px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.invoiceNoDateCell {
+  grid-column: 2;
+  grid-row: 3;
+  border-bottom: 1px solid #333;
+  padding: 6px 10px;
+}
+.invoiceAgreementCell {
+  grid-column: 1 / 3;
+  grid-row: 4;
+  border-bottom: 1px solid #333;
+  padding: 10px 10px;
+  font-size: 13px;
+  line-height: 18px;
+  text-align: center;
+}
+.invoicePrintText {
+  display: none;
+  white-space: pre-wrap;
+  line-height: 16px;
+  font-size: 12px;
+  color: #303133;
+}
+.invoiceLabel {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.invoiceInput {
+  width: 100%;
+}
+.invoiceInput >>> .el-input__inner {
+  border: 0;
+  padding: 0;
+  line-height: 16px;
+  height: auto;
+  font-size: 12px;
+  color: #303133;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  text-align: center;
+}
+.invoiceInput >>> .el-textarea__inner {
+  border: 0;
+  padding: 0;
+  line-height: 16px;
+  font-size: 12px;
+  color: #303133;
+  border-radius: 0;
+  resize: none;
+  box-shadow: none;
+  background: transparent;
+  overflow: hidden;
+}
+.invoiceTitle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.invoiceNoDateRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 16px;
+}
+.invoiceFooter {
+  border-top: 0;
+}
+.invoiceFooterBox {
+  border-left: 0;
+  border-right: 0;
+}
+.invoiceFooterTable {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  grid-template-rows: auto auto;
+  border-bottom: 1px solid #333;
+}
+.invoiceFooterCell {
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 16px;
+  color: #303133;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.invoiceFooterTable .invoiceFooterCell:nth-child(1),
+.invoiceFooterTable .invoiceFooterCell:nth-child(2) {
+  border-bottom: 1px solid #333;
+}
+.invoiceFooterLabel {
+  border-right: 1px solid #333;
+  font-weight: 700;
+}
+.invoiceFooterVal .invoicePrintText {
+  text-align: center;
+}
+.invoiceFooterTerms {
+  padding: 10px 10px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #303133;
+  border-bottom: 1px solid #333;
+}
+.invoiceFooterBank {
+  padding: 8px 10px 12px 10px;
+}
+.invoiceFooterBank .invoiceInput >>> .el-textarea__inner {
+  text-align: left;
+  overflow: visible;
+}
+.invoiceFooterBank .invoicePrintText {
+  display: none;
+  white-space: pre-wrap;
+  line-height: 18px;
+  font-size: 12px;
+  color: #303133;
+  text-align: left;
+}
+.invoiceNoDateItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+}
+.invoiceMetaLabel {
+  font-weight: 700;
+}
+.invoiceMetaVal {
+  font-weight: 600;
+}
 .meta {
   border-bottom: 1px solid #333;
 }
@@ -1084,6 +1487,14 @@ export default {
 }
 .price {
   width: 80px;
+}
+.td.price .uPriceCell {
+  width: 100%;
+  min-width: 0;
+  white-space: normal;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
 }
 .amount {
   width: 100px;

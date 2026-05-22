@@ -4,7 +4,7 @@
 			<p slot="reference">{{value}}</p>
 			<ul class="list">
 				<template v-for="(item,index) in list">
-					<li @click="choice(item)" :class="{hover:index==hover}">{{item.name}}</li>
+					<li :key="item.id || index" @click="choice(item)" :class="{hover:index==hover}">{{item.name}}</li>
 				</template>
 			</ul>
 		</el-popover>
@@ -53,9 +53,13 @@
         methods:{
 			choice(parm){
 				this.value=parm.name;
+				this.params.node.data[this.params.dispose.text]=parm.name;
 				this.params.node.data[this.params.dispose.key]=parm.id;
 				this.$el.parentNode.focus();
 				this.params.api.stopEditing();
+				try{
+					this.params.context && this.params.context.runHandleGrid && this.params.context.runHandleGrid();
+				}catch(e){}
 			},
 			storehouseEvent(e){
 				let keyCode=e.keyCode;
