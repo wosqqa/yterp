@@ -91,7 +91,13 @@
           </div>
           <div class="gridWrap">
             <div class="goodsGrid">
-              <div v-for="item in tableData" :key="item.id" class="goodsCard" @click="togglePick(item)">
+              <div
+                v-for="item in tableData"
+                :key="item.id"
+                class="goodsCard"
+                @click="pickOnce(item)"
+                @dblclick.stop="pickIncLast(item)"
+              >
                 <div class="cardImg">
                   <el-image v-if="getImgUrl(item)" :src="getImgUrl(item)" fit="contain">
                     <div slot="error" class="imgError">
@@ -179,8 +185,7 @@ export default {
       },
       batchNums: "",
       batchSelected: [],
-      selectedMap: {},
-      selectedOrder: [],
+      selectedLines: [],
       syncing: false
     };
   },
@@ -221,7 +226,7 @@ export default {
       return this.$store.state;
     },
     selectedList() {
-      return this.selectedOrder.map(id => this.selectedMap[id]).filter(v => v);
+      return this.selectedLines;
     },
     selectedTotalQty() {
       let total = this.$calc.chain(0);
@@ -232,24 +237,30 @@ export default {
     }
   },
   methods: {
+    normalizeSelectedLine(item, fallbackLineId) {
+      const goodsId = Number(item && item.id);
+      if (!goodsId) return null;
+      const lineIdRaw = item && item.lineId != null ? String(item.lineId) : "";
+      const lineId =
+        lineIdRaw ||
+        (fallbackLineId != null ? String(fallbackLineId) : "") ||
+        String(goodsId) + "-" + String(this.$lib.getUniqid());
+      return Object.assign({}, item, {
+        lineId,
+        id: goodsId,
+        name: item && item.name ? item.name : "",
+        nums: item && item.nums != null && item.nums !== "" ? item.nums : 1,
+        attr: ""
+      });
+    },
     initSelected(list) {
       if (!Array.isArray(list)) return;
-      const map = {};
-      const order = [];
-      list.forEach(item => {
-        if (!item) return;
-        const id = Number(item.id);
-        if (!id) return;
-        map[id] = Object.assign({}, item, {
-          id,
-          name: item.name || "",
-          nums: item.nums != null && item.nums !== "" ? item.nums : 1,
-          attr: ""
-        });
-        order.indexOf(id) === -1 && order.push(id);
+      const next = [];
+      list.forEach((item, idx) => {
+        const normalized = this.normalizeSelectedLine(item, String(Number(item && item.id) || 0) + "-" + String(idx));
+        normalized && next.push(normalized);
       });
-      this.selectedMap = map;
-      this.selectedOrder = order;
+      this.selectedLines = next;
     },
     emitInput() {
       if (!Array.isArray(this.value)) return;
@@ -355,22 +366,36 @@ export default {
         }
       });
     },
-    togglePick(item) {
-      if (this.isPicked(item.id)) {
-        const current = this.selectedMap[item.id];
-        const next = this.$calc
-          .chain(current.nums || 0)
-          .add(1)
-          .done();
-        current.nums = next;
-        this.selectedMap = Object.assign({}, this.selectedMap);
-        this.emitInput();
+    findLastIndexByGoodsId(id) {
+      const gid = Number(id);
+      if (!gid) return -1;
+      for (let i = this.selectedLines.length - 1; i >= 0; i--) {
+        if (Number(this.selectedLines[i] && this.selectedLines[i].id) === gid) return i;
+      }
+      return -1;
+    },
+    pickOnce(item) {
+      if (!item || !item.id) return;
+      if (this.isPicked(item.id)) return;
+      const line = this.normalizeSelectedLine(this.$lib.extend(true, {}, item, { nums: 1, attr: "" }));
+      if (!line) return;
+      this.selectedLines = this.selectedLines.concat([line]);
+      this.emitInput();
+    },
+    pickIncLast(item) {
+      if (!item || !item.id) return;
+      const idx = this.findLastIndexByGoodsId(item.id);
+      if (idx === -1) {
+        this.pickOnce(item);
         return;
       }
-      this.selectedMap = Object.assign({}, this.selectedMap, {
-        [item.id]: this.$lib.extend(true, {}, item, { nums: 1, attr: "" })
-      });
-      this.selectedOrder = this.selectedOrder.concat([item.id]);
+      const row = this.selectedLines[idx];
+      const next = this.$calc
+        .chain(Number(row.nums) || 0)
+        .add(1)
+        .done();
+      row.nums = next;
+      this.selectedLines = this.selectedLines.slice();
       this.emitInput();
     },
     pickAll() {
@@ -379,33 +404,32 @@ export default {
         this.$message && this.$message({ type: "warning", message: "暂无可选择的商品数据!" });
         return;
       }
-      const nextMap = Object.assign({}, this.selectedMap);
-      const nextOrder = this.selectedOrder.slice();
       let added = 0;
       list.forEach(item => {
         if (!item || !item.id) return;
-        if (nextMap.hasOwnProperty(item.id)) return;
-        nextMap[item.id] = this.$lib.extend(true, {}, item, { nums: 1, attr: "" });
-        nextOrder.push(item.id);
+        if (this.isPicked(item.id)) return;
+        const line = this.normalizeSelectedLine(this.$lib.extend(true, {}, item, { nums: 1, attr: "" }));
+        if (!line) return;
+        this.selectedLines.push(line);
         added++;
       });
-      this.selectedMap = nextMap;
-      this.selectedOrder = nextOrder;
+      this.selectedLines = this.selectedLines.slice();
       this.emitInput();
       this.$message && this.$message({ type: "success", message: added > 0 ? `已加入 ${added} 个商品` : "已全部加入" });
     },
     isPicked(id) {
-      return this.selectedMap.hasOwnProperty(id);
+      const gid = Number(id);
+      if (!gid) return false;
+      return this.selectedLines.some(r => Number(r && r.id) === gid);
     },
     removeSelected(row) {
-      delete this.selectedMap[row.id];
-      this.selectedMap = Object.assign({}, this.selectedMap);
-      this.selectedOrder = this.selectedOrder.filter(id => id !== row.id);
+      const lid = row && row.lineId != null ? String(row.lineId) : "";
+      if (!lid) return;
+      this.selectedLines = this.selectedLines.filter(r => String(r && r.lineId) !== lid);
       this.emitInput();
     },
     clearSelected() {
-      this.selectedMap = {};
-      this.selectedOrder = [];
+      this.selectedLines = [];
       this.emitInput();
       this.$refs.selectedTable && this.$refs.selectedTable.clearSelection();
     },
@@ -421,7 +445,9 @@ export default {
         if (target.closest("button")) return;
         if (target.closest("a")) return;
       }
-      const selected = Array.isArray(this.batchSelected) && this.batchSelected.some(r => Number(r.id) === Number(row.id));
+      const selected =
+        Array.isArray(this.batchSelected) &&
+        this.batchSelected.some(r => String(r && r.lineId) === String(row && row.lineId));
       this.$refs.selectedTable && this.$refs.selectedTable.toggleRowSelection(row, !selected);
     },
     applyBatchNums() {
@@ -435,10 +461,10 @@ export default {
         return;
       }
       this.batchSelected.forEach(row => {
-        if (!row || !row.id) return;
+        if (!row) return;
         row.nums = next;
       });
-      this.selectedMap = Object.assign({}, this.selectedMap);
+      this.selectedLines = this.selectedLines.slice();
       this.emitInput();
     },
     numsChange(row) {

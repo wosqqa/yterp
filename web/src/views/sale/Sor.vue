@@ -446,6 +446,13 @@ export default {
             dispose: true,
           },
           {
+            headerName: "库存",
+            width: 90,
+            field: "stock",
+            hide: false,
+            dispose: false,
+          },
+          {
             headerName: "单价",
             width: 90,
             field: "price",
@@ -611,6 +618,7 @@ export default {
         attr: "",
         unit: unitVal == "-1" ? "点击选择" : unitVal,
         warehouse: goods.type == 0 ? "点击选择" : "",
+        stock: "",
         price: goods[priceType] == null || goods[priceType] === "" ? 0 : goods[priceType],
         nums: item.nums == null || item.nums === "" ? 1 : item.nums,
         handle: 0,
@@ -629,41 +637,30 @@ export default {
       if (!api) return;
 
       const list = Array.isArray(selection) ? selection : [];
-      const pickedMap = {};
-      const pickedOrder = [];
-      list.forEach((item) => {
+      const current = this.$grid.getGridData(this.grid.options).filter((r) => r && r.key != null);
+      const currentLineMap = {};
+      current.forEach((row) => {
+        const lineId = row && row.uniqid != null ? String(row.uniqid) : "";
+        if (!lineId) return;
+        currentLineMap[lineId] = row;
+      });
+
+      const next = [];
+      list.forEach((item, idx) => {
         if (!item) return;
         const id = Number(item.id);
         if (!id) return;
         const nums = item.nums == null || item.nums === "" ? 1 : Number(item.nums);
-        pickedMap[id] = pickedMap[id]
-          ? Object.assign({}, pickedMap[id], {
-              nums: this.$calc.chain(pickedMap[id].nums || 0).add(nums || 0).done(),
-              raw: pickedMap[id].raw || item,
-            })
-          : { id, nums: nums || 0, raw: item };
-        pickedOrder.indexOf(id) === -1 && pickedOrder.push(id);
-      });
-
-      const current = this.$grid.getGridData(this.grid.options).filter((r) => r && r.key != null);
-      const currentMap = {};
-      current.forEach((row) => {
-        const key = Number(row.key);
-        if (!key) return;
-        currentMap[key] || (currentMap[key] = row);
-      });
-
-      const next = [];
-      pickedOrder.forEach((id) => {
-        const picked = pickedMap[id];
-        if (!picked) return;
-        const exist = currentMap[id];
+        const lineIdRaw = item.lineId != null ? String(item.lineId) : "";
+        const lineId = lineIdRaw ? lineIdRaw : String(id) + "-" + String(idx);
+        const exist = currentLineMap[lineId];
         if (exist) {
-          exist.nums = picked.nums;
+          exist.nums = nums;
           next.push(exist);
         } else {
-          const row = this.buildGridRowFromGoods(picked.raw);
-          row.nums = picked.nums;
+          const row = this.buildGridRowFromGoods(item);
+          row.uniqid = lineId;
+          row.nums = nums;
           next.push(row);
         }
       });
@@ -684,6 +681,7 @@ export default {
       return rows.map((r) => {
         const unitData = Array.isArray(r.unitData) ? r.unitData : [];
         return {
+          lineId: r.uniqid,
           id: r.key,
           name: r.name,
           number: r.number,

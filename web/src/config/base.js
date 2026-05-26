@@ -1,11 +1,18 @@
 import Vue from "vue";
 
 function getApiBase() {
+  const envBase = (typeof process !== "undefined" && process.env && process.env.VUE_APP_API_BASE) || "";
+  if (envBase) {
+    const s = String(envBase).trim();
+    return s.endsWith("/") ? s : s + "/";
+  }
   try {
     if (typeof window !== "undefined" && window.location) {
       const host = window.location.hostname || "127.0.0.1";
       const protocol = window.location.protocol || "http:";
-      return `${protocol}//${host}:3000/`;
+      const port = window.location.port || "";
+      if (String(port) === "8080" || String(port) === "8083") return `${protocol}//${host}:3000/`;
+      return `${protocol}//${host}${port ? ":" + port : ""}/`;
     }
   } catch (e) {}
   return "http://127.0.0.1:3000/";

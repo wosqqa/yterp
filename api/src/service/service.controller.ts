@@ -54,6 +54,14 @@ export class ServiceController {
 
   @UseGuards(AuthGuard('jwt'))
   @ApiBearerAuth()
+  @Post('goodsDepot')
+  @ApiOperation({ summary: 'Get Goods Stock By Warehouse' })
+  goodsDepot(@Body() body: any, @Request() req) {
+    return this.serviceService.goodsDepot(body, req.user);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
   @Post('accountRecord')
   @ApiOperation({ summary: 'Get Account List' })
   accountRecord(@Body() body: any, @Request() req) {

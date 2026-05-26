@@ -256,6 +256,93 @@ export class ServiceService {
     }
   }
 
+  async goodsDepot(body: any, user: any) {
+    const { page, limit, goods, attr } = body || {};
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const goodsId = Number(goods);
+    if (!Number.isFinite(pageNum) || !Number.isFinite(limitNum) || pageNum < 1 || limitNum < 1 || !goodsId || attr === undefined) {
+      return { state: 'error', info: '传入参数不完整!' };
+    }
+
+    const toNum = (v: any) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : 0;
+    };
+    const parseJson = (v: any, fallback: any) => {
+      try {
+        if (v === null || v === undefined || v === '') return fallback;
+        return JSON.parse(v);
+      } catch {
+        return fallback;
+      }
+    };
+    const unitSwitch = (nums: number, units: any[]) => {
+      if (!Array.isArray(units) || units.length === 0) return nums;
+      const record: Array<{ name: string; nums: number }> = [];
+      let remain = nums;
+      for (const u of units) {
+        const base = toNum(u?.nums);
+        if (base <= 0) continue;
+        if (Math.abs(remain) < base) {
+          record.push({ name: String(u?.source || ''), nums: remain });
+          remain = 0;
+        } else {
+          const mod = Math.abs(remain % base);
+          record.push({ name: String(u?.source || ''), nums: mod });
+          remain = (remain - mod) / base;
+        }
+      }
+      const end = units[units.length - 1] || {};
+      record.push({ name: String(end?.name || ''), nums: remain });
+      let text = '';
+      for (const r of [...record].reverse()) {
+        if (toNum(r.nums) !== 0) text += `${r.nums}${r.name}`;
+      }
+      return text === '' ? 0 : text;
+    };
+
+    const commonFilter = user && user.role === 0 ? {} : { frame: user && user.frame ? user.frame : 0 };
+    const count = await this.prisma.warehouse.count({ where: commonFilter });
+    const warehouses = await this.prisma.warehouse.findMany({
+      where: commonFilter,
+      orderBy: { id: 'desc' },
+      skip: (pageNum - 1) * limitNum,
+      take: limitNum,
+      select: { id: true, name: true },
+    });
+    const warehouseIds = warehouses.map((w) => w.id);
+
+    const attrText = attr == null ? '' : String(attr);
+    const roomRows = warehouseIds.length
+      ? await this.prisma.room.findMany({
+          where: { warehouse: { in: warehouseIds }, goods: goodsId, attr: attrText },
+          select: { warehouse: true, nums: true },
+        })
+      : [];
+    const roomMap = new Map<number, any>();
+    roomRows.forEach((r) => roomMap.set(Number(r.warehouse), r));
+
+    const goodsRow = await this.prisma.goods.findUnique({
+      where: { id: goodsId },
+      select: { unit: true, units: true },
+    });
+    const isMultiUnit = goodsRow && String(goodsRow.unit) === '-1';
+    const units = isMultiUnit ? parseJson(goodsRow?.units, []) : [];
+
+    const info = warehouses.map((w) => {
+      const hit = roomMap.get(Number(w.id));
+      const base = hit ? toNum(hit.nums) : 0;
+      return {
+        warehouse: Number(w.id),
+        name: w.name || '',
+        nums: isMultiUnit ? unitSwitch(base, units) : base,
+      };
+    });
+
+    return { state: 'success', count, info };
+  }
+
   async accountRecord(body: any, user: any) {
     const { page, limit, query } = body;
     const where: any = {};

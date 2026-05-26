@@ -3,6 +3,8 @@
     <div class="floatTools">
       <el-button size="mini" @click="toggleImgQty">{{ imgQtyHidden ? "显示数量" : "隐藏数量" }}</el-button>
       <el-button size="mini" @click="toggleUnitPrice">{{ unitPriceHidden ? "显示单价" : "隐藏单价" }}</el-button>
+      <el-button size="mini" @click="toggleHideWarehouse2">{{ hideWarehouse2 ? "显示仓库" : "隐藏仓库" }}</el-button>
+      <el-button size="mini" @click="toggleRowDisplay">{{ rowDisplay === "single" ? "合并显示" : "单列显示" }}</el-button>
     </div>
     <div class="switchBar">
       <el-button-group>
@@ -173,7 +175,7 @@
           <div class="td no">{{ row.no }}</div>
           <div class="td desc big">{{ row.desc }}</div>
           <div class="td pic">
-            <div class="picGrid">
+            <div class="picGrid" :class="{ singleCol: rowDisplay === 'single' }">
               <div class="picItem" v-for="img in row.pics" :key="img.key">
                 <div class="imgBox">
                   <img v-if="img.url" :src="img.url" />
@@ -300,6 +302,8 @@ export default {
       depositManual: 0,
       imgQtyHidden: false,
       unitPriceHidden: false,
+      hideWarehouse2: false,
+      rowDisplay: "merge",
       groupBy: "category",
       customerInfo: {
         name: "",
@@ -317,7 +321,6 @@ export default {
     };
   },
   created() {
-    this.loadInvoiceDraft();
     this.load();
   },
   watch: {
@@ -347,6 +350,142 @@ export default {
       return added || this.formatDate(this.classData.arrival);
     },
     rows() {
+      if (this.rowDisplay === "single" && this.groupBy === "warehouse") {
+        const map = {};
+        const order = [];
+        const warehouseCategoryOrder = {};
+        const warehouseOrder = [];
+
+        for (const item of this.detailRows) {
+          const goods = this.$lib.objectSeek(item, "goodsData") || {};
+          const categoryInfo = this.getCategoryInfo(item, goods);
+          const warehouseRaw = item && item.warehouse != null ? item.warehouse : -1;
+          const warehouseKey = String(warehouseRaw);
+          const key = warehouseKey + "||" + categoryInfo.key;
+
+          if (warehouseOrder.indexOf(warehouseKey) === -1) warehouseOrder.push(warehouseKey);
+          if (!warehouseCategoryOrder[warehouseKey]) warehouseCategoryOrder[warehouseKey] = [];
+          if (warehouseCategoryOrder[warehouseKey].indexOf(key) === -1) warehouseCategoryOrder[warehouseKey].push(key);
+
+          if (!map[key]) {
+            map[key] = {
+              key,
+              desc: categoryInfo.label,
+              pics: [],
+              ttQty: 0,
+              amountVal: 0,
+              unitPriceVal: null
+            };
+            order.push(key);
+          }
+
+          const qty = Number(item && item.nums) || 0;
+          const amt = item && item.tpt != null && item.tpt !== "" ? Number(item.tpt) : Number(item && item.total) || 0;
+          map[key].ttQty = this.$calc.chain(map[key].ttQty).add(qty).done();
+          map[key].amountVal = this.$calc.chain(map[key].amountVal).add(amt).done();
+          map[key].unitPriceVal == null && (map[key].unitPriceVal = Number(item && item.price) || 0);
+
+          const picKey = item && item.id != null ? String(item.id) : this.$lib.getUniqid();
+          map[key].pics.push({
+            key: key + "-row-" + picKey,
+            picKey: "row-" + picKey,
+            url: this.getImgUrl(goods),
+            qty
+          });
+        }
+
+        const rowMap = {};
+        order.forEach(k => {
+          const row = map[k];
+          const usdVal = this.exchangeRate ? row.amountVal / this.exchangeRate : 0;
+          const r = {
+            key: row.key,
+            warehouseKey: String(row.key).split("||")[0],
+            desc: row.desc,
+            pics: row.pics,
+            ttQty: row.ttQty,
+            uPrice: this.formatMoney(row.unitPriceVal || 0, 0),
+            uPriceText: "",
+            amountVal: row.amountVal,
+            usdVal,
+            amount: this.formatMoney(row.amountVal, 2),
+            usd: this.formatMoney(usdVal, 2)
+          };
+          rowMap[r.key] = r;
+        });
+
+        const sortWarehouseKey = (a, b) => {
+          const sa = a == null ? "" : String(a).trim();
+          const sb = b == null ? "" : String(b).trim();
+          if (!sa && !sb) return 0;
+          if (!sa) return 1;
+          if (!sb) return -1;
+          const na = Number(sa);
+          const nb = Number(sb);
+          const fa = Number.isFinite(na);
+          const fb = Number.isFinite(nb);
+          if (fa && fb) return na - nb;
+          if (fa) return -1;
+          if (fb) return 1;
+          return sa.localeCompare(sb);
+        };
+
+        const out = [];
+        warehouseOrder.sort(sortWarehouseKey).forEach(wKey => {
+          if (this.hideWarehouse2 && String(wKey) === "2") return;
+          const catKeys = warehouseCategoryOrder[wKey] || [];
+          catKeys.forEach((k, idx) => {
+            const r = rowMap[k];
+            if (!r) return;
+            out.push(
+              Object.assign({}, r, {
+                no: idx === 0 ? this.getWarehouseName(wKey) : ""
+              })
+            );
+          });
+        });
+        return out;
+      }
+
+      if (this.rowDisplay === "single") {
+        const out = [];
+        let idx = 1;
+        for (const item of this.detailRows) {
+          const goods = this.$lib.objectSeek(item, "goodsData") || {};
+          const categoryInfo = this.getCategoryInfo(item, goods);
+          const qty = Number(item && item.nums) || 0;
+          const amt = item && item.tpt != null && item.tpt !== "" ? Number(item.tpt) : Number(item && item.total) || 0;
+          const usdVal = this.exchangeRate ? amt / this.exchangeRate : 0;
+          const wid = item && item.warehouse != null ? String(item.warehouse) : "";
+          if (this.hideWarehouse2 && wid === "2") continue;
+          const desc = goods.data || goods.name || goods.number || (categoryInfo && categoryInfo.label) || "";
+          const picKey =
+            (goods.id != null ? String(goods.id) : goods.number != null ? String(goods.number) : "") ||
+            (item && item.id != null ? "row-" + item.id : this.$lib.getUniqid());
+          out.push({
+            key: item && item.id != null ? "row-" + item.id : this.$lib.getUniqid(),
+            no: idx++,
+            desc,
+            pics: [
+              {
+                key: "p-" + picKey,
+                picKey,
+                url: this.getImgUrl(goods),
+                qty
+              }
+            ],
+            ttQty: qty,
+            uPrice: this.formatMoney(Number(item && item.price) || 0, 0),
+            uPriceText: "",
+            amountVal: amt,
+            usdVal,
+            amount: this.formatMoney(amt, 2),
+            usd: this.formatMoney(usdVal, 2)
+          });
+        }
+        return out;
+      }
+
       const map = {};
       const order = [];
       const packCategoryOrder = {};
@@ -498,6 +637,7 @@ export default {
       const out = [];
       if (this.groupBy === "warehouse") {
         warehouseOrder.sort(sortWarehouseKey).forEach(warehouseKey => {
+          if (this.hideWarehouse2 && String(warehouseKey) === "2") return;
           const catKeys = warehouseCategoryOrder[warehouseKey] || [];
           catKeys.forEach((k, idx) => {
             const r = rowMap[k];
@@ -612,6 +752,12 @@ export default {
     }
   },
   methods: {
+    toggleRowDisplay() {
+      this.rowDisplay = this.rowDisplay === "single" ? "merge" : "single";
+    },
+    toggleHideWarehouse2() {
+      this.hideWarehouse2 = !this.hideWarehouse2;
+    },
     setGroupBy(val) {
       this.groupBy = val;
       this.headerMode = "order";
@@ -620,21 +766,50 @@ export default {
       this.headerMode = "invoice";
       this.ensureInvoiceDefaults();
     },
-    getInvoiceKey(part) {
+    getInvoiceScope() {
+      const num = this.classData && this.classData.number != null ? String(this.classData.number).trim() : "";
+      if (num) return encodeURIComponent(num);
+      const src = this.source != null ? String(this.source).trim() : "";
+      if (src) return encodeURIComponent(src);
+      return "global";
+    },
+    getInvoiceLegacyKey(part) {
       return "sorPrint:commercialInvoice:" + String(part || "");
+    },
+    getInvoiceKey(part) {
+      return "sorPrint:commercialInvoice:" + this.getInvoiceScope() + ":" + String(part || "");
     },
     loadInvoiceDraft() {
       try {
+        const scope = this.getInvoiceScope();
         const seller = localStorage.getItem(this.getInvoiceKey("seller"));
         const to = localStorage.getItem(this.getInvoiceKey("to"));
         const totalText = localStorage.getItem(this.getInvoiceKey("totalText"));
         const wordsText = localStorage.getItem(this.getInvoiceKey("wordsText"));
         const bankText = localStorage.getItem(this.getInvoiceKey("bankText"));
-        this.invoiceSeller = seller != null ? seller : "";
-        this.invoiceTo = to != null ? to : "";
-        this.invoiceTotalText = totalText != null ? totalText : "";
-        this.invoiceWordsText = wordsText != null ? wordsText : "";
-        this.invoiceBankText = bankText != null ? bankText : "";
+
+        const hasAnyScoped =
+          seller != null || to != null || totalText != null || wordsText != null || bankText != null;
+
+        const legacySeller = !hasAnyScoped && scope !== "global" ? localStorage.getItem(this.getInvoiceLegacyKey("seller")) : null;
+        const legacyTo = !hasAnyScoped && scope !== "global" ? localStorage.getItem(this.getInvoiceLegacyKey("to")) : null;
+        const legacyTotalText = !hasAnyScoped && scope !== "global" ? localStorage.getItem(this.getInvoiceLegacyKey("totalText")) : null;
+        const legacyWordsText = !hasAnyScoped && scope !== "global" ? localStorage.getItem(this.getInvoiceLegacyKey("wordsText")) : null;
+        const legacyBankText = !hasAnyScoped && scope !== "global" ? localStorage.getItem(this.getInvoiceLegacyKey("bankText")) : null;
+
+        this.invoiceSeller = "";
+        this.invoiceTo = "";
+        this.invoiceTotalText = "";
+        this.invoiceWordsText = "";
+        this.invoiceBankText = "";
+
+        this.invoiceSeller = seller != null ? seller : legacySeller != null ? legacySeller : "";
+        this.invoiceTo = to != null ? to : legacyTo != null ? legacyTo : "";
+        this.invoiceTotalText = totalText != null ? totalText : legacyTotalText != null ? legacyTotalText : "";
+        this.invoiceWordsText = wordsText != null ? wordsText : legacyWordsText != null ? legacyWordsText : "";
+        this.invoiceBankText = bankText != null ? bankText : legacyBankText != null ? legacyBankText : "";
+
+        if (!hasAnyScoped && scope !== "global") this.persistInvoiceDraftDebounced();
       } catch (e) {
         this.invoiceSeller = "";
         this.invoiceTo = "";
@@ -1023,6 +1198,7 @@ export default {
             arrival: this.formatDate(cls.arrival || ""),
             data: cls.data || ""
           };
+          this.loadInvoiceDraft();
           this.detailRows = Array.isArray(result.info.info) ? result.info.info : [];
           const customerId =
             cls.customer ||
@@ -1513,6 +1689,18 @@ export default {
   justify-content: start;
   width: 100%;
   padding: 6px 0;
+}
+.picGrid.singleCol {
+  grid-template-columns: 50px;
+  justify-content: end;
+  justify-items: end;
+}
+.picGrid.singleCol .picItem {
+  align-items: flex-end;
+}
+.picGrid.singleCol .imgQty {
+  width: 50px;
+  text-align: center;
 }
 .picItem {
   display: flex;

@@ -14,6 +14,7 @@
 <script>
 	//内容组件|仓库组件
 	import Vue from 'vue';
+	const stockCache = {};
     export default Vue.extend({
         name: 'Storehouse',
         data() {
@@ -51,10 +52,64 @@
 			}
 		},
         methods:{
+			cacheKey(goodsId, attr){
+				return String(Number(goodsId) || 0) + "||" + String(attr == null ? "" : attr);
+			},
+			setStockVal(val){
+				try{
+					this.params && this.params.node && this.params.node.setDataValue && this.params.node.setDataValue("stock", val);
+				}catch(e){
+					try{
+						this.params.node.data.stock = val;
+					}catch(e2){}
+				}
+			},
+			fetchGoodsDepot(goodsId, attr){
+				const key = this.cacheKey(goodsId, attr);
+				if (stockCache[key]) return stockCache[key];
+				stockCache[key] = new Promise((resolve) => {
+					this.$axios.post("service/goodsDepot", {
+						page: 1,
+						limit: 300,
+						goods: goodsId,
+						attr: attr == null ? "" : attr
+					}).then((result) => {
+						if (result && result.state == "success") {
+							resolve(Array.isArray(result.info) ? result.info : []);
+						} else {
+							resolve([]);
+						}
+					}).catch(() => resolve([]));
+				});
+				return stockCache[key];
+			},
+			updateStockForWarehouse(warehouseId){
+				const data = this.params && this.params.node ? this.params.node.data : null;
+				if (!data) return;
+				const goodsId = Number(data.key);
+				const goodsType = Number(data.goodsType);
+				const wid = Number(warehouseId);
+				if (!goodsId || goodsType !== 0 || !wid) {
+					this.setStockVal("");
+					return;
+				}
+				const attr = data.attr == null ? "" : String(data.attr);
+				this.fetchGoodsDepot(goodsId, attr).then((list) => {
+					const hit = Array.isArray(list) ? list.find((it) => Number(it && it.warehouse) === wid) : null;
+					const nums = hit && hit.nums != null && hit.nums !== "" ? hit.nums : 0;
+					this.setStockVal(nums);
+				});
+			},
 			choice(parm){
 				this.value=parm.name;
-				this.params.node.data[this.params.dispose.text]=parm.name;
-				this.params.node.data[this.params.dispose.key]=parm.id;
+				try{
+					this.params.node.setDataValue(this.params.dispose.text, parm.name);
+					this.params.node.setDataValue(this.params.dispose.key, parm.id);
+				}catch(e){
+					this.params.node.data[this.params.dispose.text]=parm.name;
+					this.params.node.data[this.params.dispose.key]=parm.id;
+				}
+				this.updateStockForWarehouse(parm.id);
 				this.$el.parentNode.focus();
 				this.params.api.stopEditing();
 				try{
