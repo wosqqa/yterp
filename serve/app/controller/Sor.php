@@ -18,8 +18,8 @@ class Sor extends Acl{
                 [['startArrival'=>'arrival'],'startTime'],
                 [['endArrival'=>'arrival'],'endTime'],
                 ['user','fullEq'],
-                ['examine','fullDec1'],
-                ['state','fullDec1'],
+                ['examine','fullEq0'],
+                ['state','fullEq0'],
                 ['data','fullLike']
             ]);//构造SQL
             //商品信息扩展查询

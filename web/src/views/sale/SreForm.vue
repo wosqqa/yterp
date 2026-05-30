@@ -67,8 +67,8 @@
               placeholder="请选择审核状态"
               clearable
             >
-              <el-option label="未审核" :value="1"></el-option>
-              <el-option label="已审核" :value="2"></el-option>
+              <el-option label="未审核" :value="0"></el-option>
+              <el-option label="已审核" :value="1"></el-option>
             </el-select>
           </el-form-item>
           <el-form-item>
@@ -77,9 +77,9 @@
               placeholder="请选择核销状态"
               clearable
             >
-              <el-option label="未核销" :value="1"></el-option>
-              <el-option label="部分核销" :value="2"></el-option>
-              <el-option label="已核销" :value="3"></el-option>
+              <el-option label="未核销" :value="0"></el-option>
+              <el-option label="部分核销" :value="1"></el-option>
+              <el-option label="已核销" :value="2"></el-option>
             </el-select>
           </el-form-item>
           <el-form-item>
@@ -88,10 +88,10 @@
               placeholder="请选择费用状态"
               clearable
             >
-              <el-option label="未结算" :value="1"></el-option>
-              <el-option label="部分结算" :value="2"></el-option>
-              <el-option label="已结算" :value="3"></el-option>
-              <el-option label="无需结算" :value="4"></el-option>
+              <el-option label="未结算" :value="0"></el-option>
+              <el-option label="部分结算" :value="1"></el-option>
+              <el-option label="已结算" :value="2"></el-option>
+              <el-option label="无需结算" :value="3"></el-option>
             </el-select>
           </el-form-item>
           <el-form-item>
@@ -100,10 +100,10 @@
               placeholder="请选择发票状态"
               clearable
             >
-              <el-option label="未开具" :value="1"></el-option>
-              <el-option label="部分开具" :value="2"></el-option>
-              <el-option label="已开具" :value="3"></el-option>
-              <el-option label="无需开具" :value="4"></el-option>
+              <el-option label="未开具" :value="0"></el-option>
+              <el-option label="部分开具" :value="1"></el-option>
+              <el-option label="已开具" :value="2"></el-option>
+              <el-option label="无需开具" :value="3"></el-option>
             </el-select>
           </el-form-item>
           <el-form-item>
@@ -112,8 +112,8 @@
               placeholder="请选择核对状态"
               clearable
             >
-              <el-option label="未核对" :value="1"></el-option>
-              <el-option label="已核对" :value="2"></el-option>
+              <el-option label="未核对" :value="0"></el-option>
+              <el-option label="已核对" :value="1"></el-option>
             </el-select>
           </el-form-item>
           <el-form-item>
@@ -483,12 +483,9 @@
                 style="padding: 7px"
               ></el-button>
               <ul>
-                <template v-for="item in scope.row.recordData">
-                  <li>
-                    {{ item.extension.time }} - {{ item.userData.name }} -
-                    {{ item.info }}
-                  </li>
-                </template>
+                <li v-for="(item, idx) in scope.row.recordData" :key="item.id || idx">
+                  {{ item.extension.time }} - {{ item.userData.name }} - {{ item.info }}
+                </li>
               </ul>
             </el-popover>
           </el-button-group>

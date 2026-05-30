@@ -607,6 +607,8 @@ function fastSql($arr,$config) {
             } elseif ($condition == 'noNullEq') {
                 //不为NULL等于数据
                 $val===null || ($sql[] = [$field,'=',$val]);
+            } elseif ($condition == 'fullEq0') {
+                ($val === null || $val === '') || ($sql[] = [$field,'=',$val]);
             } elseif ($condition == 'fullDec1') {
                 //不为空内容减1
                 empty($val) || ($sql[] = [$field,'=',$val-1]);

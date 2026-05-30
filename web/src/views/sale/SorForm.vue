@@ -83,8 +83,8 @@
               placeholder="请选择审核状态"
               clearable
             >
-              <el-option label="未审核" :value="1"></el-option>
-              <el-option label="已审核" :value="2"></el-option>
+              <el-option label="未审核" :value="0"></el-option>
+              <el-option label="已审核" :value="1"></el-option>
             </el-select>
           </el-form-item>
           <el-form-item>
@@ -93,10 +93,10 @@
               placeholder="请选择出库状态"
               clearable
             >
-              <el-option label="未出库" :value="1"></el-option>
-              <el-option label="部分出库" :value="2"></el-option>
-              <el-option label="已出库" :value="3"></el-option>
-              <el-option label="关闭" :value="4"></el-option>
+              <el-option label="未出库" :value="0"></el-option>
+              <el-option label="部分出库" :value="1"></el-option>
+              <el-option label="已出库" :value="2"></el-option>
+              <el-option label="关闭" :value="3"></el-option>
             </el-select>
           </el-form-item>
           <el-form-item>
@@ -464,7 +464,7 @@ export default {
         startArrival: "",
         endArrival: "",
         user: null,
-        examine: 1,
+        examine: 0,
         state: "",
         data: "",
       },

@@ -767,7 +767,19 @@ export default {
             classCopy[k] != null && delete classCopy[k];
           });
 
-          const infoCopy = Array.isArray(raw.info) ? raw.info.map((it) => Object.assign({}, it)) : [];
+          const infoCopy = Array.isArray(raw.info)
+            ? raw.info.map((it) => {
+                const row = Object.assign({}, it);
+                row.id != null && delete row.id;
+                row.pid != null && delete row.pid;
+                row.source = 0;
+                row.serial = [];
+                row.goodsData != null && delete row.goodsData;
+                row.warehouseData != null && delete row.warehouseData;
+                row.extension != null && delete row.extension;
+                return row;
+              })
+            : [];
           const costCopy = Array.isArray(raw.cost) ? raw.cost.map((it) => Object.assign({}, it)) : [];
 
           this.$axios

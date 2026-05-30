@@ -16,11 +16,11 @@ class Sell extends Acl{
                 ['people','fullEq'],
                 [['startTime'=>'time'],'startTime'],
                 [['endTime'=>'time'],'endTime'],
-                ['examine','fullDec1'],
-                ['nucleus','fullDec1'],
-                ['cse','fullDec1'],
-                ['invoice','fullDec1'],
-                ['check','fullDec1'],
+                ['examine','fullEq0'],
+                ['nucleus','fullEq0'],
+                ['cse','fullEq0'],
+                ['invoice','fullEq0'],
+                ['check','fullEq0'],
                 ['data','fullLike']
             ]);//构造SQL
             //商品信息扩展查询
@@ -266,7 +266,9 @@ class Sell extends Acl{
                         //1 批次号
                         empty($infoVo['batch'])||$batchGather[]=$infoVo['batch'];
                         //2 序列号
-                        $serialGather=array_merge($serialGather,json_decode($infoVo['serial']));
+                        $serialData=json_decode($infoVo['serial'],true);
+                        is_array($serialData) || ($serialData=[]);
+                        $serialGather=array_merge($serialGather,$serialData);
                         //3 仓储条件
                         empty($infoVo['warehouse'])||$roomWhereOrSql[]=[['warehouse','=',$infoVo['warehouse']],['goods','=',$infoVo['goods']],['attr','=',$infoVo['attr']]];
                     }

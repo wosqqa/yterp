@@ -2,6 +2,11 @@
 namespace app\controller;
 use app\controller\Acl;
 use app\model\{Goods,Serial,Batch,Cost};
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
+use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use think\facade\{Db,Filesystem};
 use think\exception\ValidateException;
 class Service extends Acl {
@@ -587,6 +592,362 @@ class Service extends Acl {
             $result = ['state' => 'error','info' => '传入参数不完整!'];
         }
         return json($result);
+    }
+
+    public function exportXlsx(){
+        $input=input('post.');
+        $template=isset($input['template'])?trim(strval($input['template'])):'';
+        $fileNameRaw=isset($input['fileName'])?trim(strval($input['fileName'])):'';
+        $fileName=$fileNameRaw==''?'export.xlsx':$fileNameRaw;
+        preg_match('/\.xlsx$/i',$fileName)||($fileName.='.xlsx');
+        $fileName=preg_replace('/[\\\\\/\:\*\?\"\<\>\|]/','_',$fileName);
+        $sheetNameRaw=isset($input['sheetName'])?trim(strval($input['sheetName'])):'';
+        $sheetName=$sheetNameRaw==''?'Sheet1':$sheetNameRaw;
+        $sheetName=substr($sheetName,0,31);
+
+        $decodeJson=function($val){
+            if(is_array($val)) return $val;
+            if(!is_string($val)) return [];
+            $text=trim($val);
+            if($text=='' || ($text[0] != '{' && $text[0] != '[')) return [];
+            $decoded=json_decode($text,true);
+            return is_array($decoded)?$decoded:[];
+        };
+
+        $moneyToNumber=function($v){
+            $s=$v===null?'':strval($v);
+            $s=str_replace([','],[''],$s);
+            $s=preg_replace('/[^\d\.\-]/','',$s);
+            return is_numeric($s)?floatval($s):0;
+        };
+
+        $tmpFiles=[];
+        $fetchImageToTemp=function($url) use (&$tmpFiles){
+            $u=trim(strval($url));
+            if($u=='' || !preg_match('/^https?:\/\//i',$u)) return null;
+            $maxBytes=2*1024*1024;
+            $bin=null;
+            $contentType='';
+            if(function_exists('curl_init')){
+                $ch=curl_init();
+                curl_setopt($ch,CURLOPT_URL,$u);
+                curl_setopt($ch,CURLOPT_RETURNTRANSFER,true);
+                curl_setopt($ch,CURLOPT_FOLLOWLOCATION,true);
+                curl_setopt($ch,CURLOPT_MAXREDIRS,3);
+                curl_setopt($ch,CURLOPT_CONNECTTIMEOUT,3);
+                curl_setopt($ch,CURLOPT_TIMEOUT,8);
+                curl_setopt($ch,CURLOPT_SSL_VERIFYPEER,false);
+                curl_setopt($ch,CURLOPT_SSL_VERIFYHOST,false);
+                $data=curl_exec($ch);
+                $contentType=strval(curl_getinfo($ch,CURLINFO_CONTENT_TYPE));
+                $code=intval(curl_getinfo($ch,CURLINFO_RESPONSE_CODE));
+                curl_close($ch);
+                if($code>=200 && $code<300 && is_string($data) && strlen($data)>0 && strlen($data)<=$maxBytes){
+                    $bin=$data;
+                }
+            }else{
+                $ctx=stream_context_create(['http'=>['timeout'=>8]]);
+                $data=@file_get_contents($u,false,$ctx);
+                if(is_string($data) && strlen($data)>0 && strlen($data)<=$maxBytes){
+                    $bin=$data;
+                }
+            }
+            if($bin===null) return null;
+            $ext='jpeg';
+            if(preg_match('/png/i',$contentType) || preg_match('/\.png(\?|$)/i',$u)) $ext='png';
+            $base=tempnam(sys_get_temp_dir(),'xlsximg_');
+            if($base===false) return null;
+            @unlink($base);
+            $path=$base.'.'.$ext;
+            $ok=@file_put_contents($path,$bin);
+            if($ok===false) return null;
+            $tmpFiles[]=$path;
+            return $path;
+        };
+
+        try{
+            $spreadsheet=new Spreadsheet();
+            $sheet=$spreadsheet->getActiveSheet();
+            $sheet->setTitle($sheetName);
+            $sheet->freezePane('A11');
+            $sheet->getPageSetup()->setFitToPage(true);
+            $sheet->getPageSetup()->setFitToWidth(1);
+            $sheet->getPageSetup()->setFitToHeight(0);
+            $sheet->getPageSetup()->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_PORTRAIT);
+            $sheet->getPageMargins()->setLeft(0.3);
+            $sheet->getPageMargins()->setRight(0.3);
+            $sheet->getPageMargins()->setTop(0.5);
+            $sheet->getPageMargins()->setBottom(0.5);
+            $sheet->getPageMargins()->setHeader(0.2);
+            $sheet->getPageMargins()->setFooter(0.2);
+
+            $sheet->getColumnDimension('A')->setWidth(6);
+            $sheet->getColumnDimension('B')->setWidth(18);
+            $sheet->getColumnDimension('C')->setWidth(16);
+            $sheet->getColumnDimension('D')->setWidth(16);
+            $sheet->getColumnDimension('E')->setWidth(16);
+            $sheet->getColumnDimension('F')->setWidth(16);
+            $sheet->getColumnDimension('G')->setWidth(10);
+            $sheet->getColumnDimension('H')->setWidth(10);
+            $sheet->getColumnDimension('I')->setWidth(14);
+            $sheet->getColumnDimension('J')->setWidth(14);
+
+            $setCell=function($r,$c,$val) use ($sheet){
+                $sheet->setCellValueByColumnAndRow(intval($c),intval($r),$val);
+                return $sheet->getCellByColumnAndRow(intval($c),intval($r));
+            };
+            $merge=function($r1,$c1,$r2,$c2) use ($sheet){
+                $sheet->mergeCellsByColumnAndRow(intval($c1),intval($r1),intval($c2),intval($r2));
+                return $sheet->getCellByColumnAndRow(intval($c1),intval($r1));
+            };
+            $applyBorder=function($r1,$r2) use ($sheet){
+                $sheet->getStyle('A'.$r1.':J'.$r2)->applyFromArray([
+                    'borders'=>[
+                        'allBorders'=>[
+                            'borderStyle'=>Border::BORDER_THIN,
+                            'color'=>['argb'=>'FF333333']
+                        ]
+                    ]
+                ]);
+            };
+
+            if($template==='sorPrint'){
+                $payload=isset($input['payload'])?$input['payload']:[];
+                is_array($payload)||($payload=$decodeJson($payload));
+
+                $exchangeRate=isset($payload['exchangeRate'])?floatval($payload['exchangeRate']):0;
+                $groupBy=isset($payload['groupBy'])?strval($payload['groupBy']):'';
+                $customerName=isset($payload['customerName'])?strval($payload['customerName']):'';
+                $customerAdd=isset($payload['customerAdd'])?strval($payload['customerAdd']):'';
+                $customerMark=isset($payload['customerMark'])?strval($payload['customerMark']):'';
+                $orderDate=isset($payload['orderDate'])?strval($payload['orderDate']):'';
+                $deliveryDate=isset($payload['deliveryDate'])?strval($payload['deliveryDate']):'';
+                $number=isset($payload['number'])?strval($payload['number']):'';
+                $freight=isset($payload['freight'])?floatval($payload['freight']):0;
+                $deposit=isset($payload['deposit'])?floatval($payload['deposit']):0;
+                $totalQty=isset($payload['totalQty'])?floatval($payload['totalQty']):0;
+                $totalRmb=isset($payload['totalRmb'])?floatval($payload['totalRmb']):0;
+                $totalUsd=isset($payload['totalUsd'])?floatval($payload['totalUsd']):0;
+                $totalWithFreight=isset($payload['totalWithFreight'])?floatval($payload['totalWithFreight']):0;
+                $balance=isset($payload['balance'])?floatval($payload['balance']):0;
+                $rows=isset($payload['rows'])?$payload['rows']:[];
+                is_array($rows)||($rows=[]);
+
+                $merge(1,1,1,10)->setValue('Kim Bags    CUSTOMER ORDER    希悦箱包');
+                $sheet->getRowDimension(1)->setRowHeight(26);
+                $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(16);
+                $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
+
+                $merge(2,1,2,6)->setValue('地址：湖南省邵东市国际商贸城東二区二楼207#783号');
+                $merge(3,1,3,6)->setValue('ADD：No. 783, 207 Gallery, Second Floor, East Second District, Shaodong International Business City, Shaodong City, Hunan Province');
+                $merge(4,1,4,6)->setValue('EMAIL：kimbagfactory@outlook.com');
+                $merge(5,1,5,6)->setValue('MOB & WhatsApp：+8619535838073 Kim');
+                $sheet->getStyle('A5')->getFont()->getColor()->setARGB('FFD40000');
+                $sheet->getStyle('A5')->getFont()->setBold(true);
+                for($r=2;$r<=5;$r++){
+                    $sheet->getRowDimension($r)->setRowHeight(18);
+                    $sheet->getStyle('A'.$r)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+                    $sheet->getStyle('A'.$r)->getFont()->setSize(11);
+                }
+                $merge(2,7,5,10)->setValue('WeChat / WhatsApp');
+                $sheet->getStyle('G2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
+
+                $metaStart=6;
+                $merge($metaStart,1,$metaStart,5)->setValue('CUSTOMER：'.$customerName);
+                $merge($metaStart,6,$metaStart,10)->setValue('ORDER DATE：'.$orderDate);
+                $merge($metaStart+1,1,$metaStart+1,5)->setValue('NUMBER：'.$number);
+                $merge($metaStart+1,6,$metaStart+1,10)->setValue('DELIVERY DATE：'.$deliveryDate);
+                $merge($metaStart+2,1,$metaStart+2,5)->setValue('ADD：'.$customerAdd);
+                $merge($metaStart+2,6,$metaStart+2,10)->setValue('Shipping Mark：'.$customerMark);
+                $applyBorder($metaStart,$metaStart+2);
+                for($r=$metaStart;$r<=$metaStart+2;$r++){
+                    $sheet->getRowDimension($r)->setRowHeight(20);
+                    $sheet->getStyle('A'.$r.':J'.$r)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+                    $sheet->getStyle('A'.$r.':J'.$r)->getFont()->setSize(11);
+                }
+
+                $tableHeaderRow=10;
+                $setCell($tableHeaderRow,1,'NO.');
+                $setCell($tableHeaderRow,2,'DESCRIPTION');
+                $merge($tableHeaderRow,3,$tableHeaderRow,6)->setValue('PICTURE');
+                $setCell($tableHeaderRow,7,'TT QTY');
+                $setCell($tableHeaderRow,8,'U/PRICE');
+                $setCell($tableHeaderRow,9,'AMOUNT');
+                $setCell($tableHeaderRow,10,$exchangeRate?("USD Price\n1USD=".$exchangeRate."RMB"):'USD Price');
+                $sheet->getRowDimension($tableHeaderRow)->setRowHeight(34);
+                $sheet->getStyle('A'.$tableHeaderRow.':J'.$tableHeaderRow)->getFont()->setBold(true)->setSize(11);
+                $sheet->getStyle('A'.$tableHeaderRow.':J'.$tableHeaderRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+                $sheet->getStyle('J'.$tableHeaderRow)->getFont()->getColor()->setARGB('FFD40000');
+                $applyBorder($tableHeaderRow,$tableHeaderRow);
+
+                $cursor=$tableHeaderRow+1;
+                $imgCols=[3=>'C',4=>'D',5=>'E',6=>'F'];
+                foreach($rows as $idx=>$row){
+                    is_array($row)||($row=[]);
+                    $pics=isset($row['pics'])?$row['pics']:[];
+                    is_array($pics)||($pics=[]);
+                    $picCount=count($pics);
+                    $picLines=intval(ceil(max(1,$picCount)/4));
+                    $blockRows=$picLines*2;
+                    $start=$cursor;
+                    $end=$cursor+$blockRows-1;
+
+                    $sheet->mergeCellsByColumnAndRow(1,$start,1,$end);
+                    $sheet->mergeCellsByColumnAndRow(2,$start,2,$end);
+                    $sheet->mergeCellsByColumnAndRow(7,$start,7,$end);
+                    $sheet->mergeCellsByColumnAndRow(8,$start,8,$end);
+                    $sheet->mergeCellsByColumnAndRow(9,$start,9,$end);
+                    $sheet->mergeCellsByColumnAndRow(10,$start,10,$end);
+
+                    $noVal=isset($row['no'])?$row['no']:($idx+1);
+                    $setCell($start,1,$noVal);
+                    $setCell($start,2,isset($row['desc'])?strval($row['desc']):'');
+                    $setCell($start,7,isset($row['ttQty'])?floatval($row['ttQty']):0);
+                    $uPriceText=($groupBy==='combo' && isset($row['uPriceText']))?strval($row['uPriceText']):(isset($row['uPrice'])?strval($row['uPrice']):'');
+                    $setCell($start,8,$uPriceText);
+                    $setCell($start,9,$moneyToNumber(isset($row['amount'])?$row['amount']:0));
+                    $setCell($start,10,$moneyToNumber(isset($row['usd'])?$row['usd']:0));
+                    $sheet->getStyle('I'.$start.':J'.$start)->getNumberFormat()->setFormatCode('#,##0.00');
+
+                    $sheet->getStyle('A'.$start.':J'.$end)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+                    $sheet->getStyle('B'.$start)->getFont()->setBold(true)->setSize(12);
+
+                    for($line=0;$line<$picLines;$line++){
+                        $imgRow=$start+$line*2;
+                        $qtyRow=$imgRow+1;
+                        $sheet->getRowDimension($imgRow)->setRowHeight(62);
+                        $sheet->getRowDimension($qtyRow)->setRowHeight(18);
+                        for($j=0;$j<4;$j++){
+                            $col=3+$j;
+                            $picIndex=$line*4+$j;
+                            $p=isset($pics[$picIndex])?$pics[$picIndex]:null;
+                            $coord=$imgCols[$col].$imgRow;
+                            $qtyCoord=$imgCols[$col].$qtyRow;
+                            $sheet->getStyle($coord)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+                            $sheet->getStyle($qtyCoord)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+                            if(!is_array($p)) continue;
+                            $url=isset($p['url'])?strval($p['url']):'';
+                            $qty=isset($p['qty'])?strval($p['qty']):'';
+                            $path=$fetchImageToTemp($url);
+                            if($path!==null){
+                                $drawing=new Drawing();
+                                $drawing->setPath($path);
+                                $drawing->setCoordinates($coord);
+                                $drawing->setOffsetX(8);
+                                $drawing->setOffsetY(8);
+                                $drawing->setWidth(74);
+                                $drawing->setHeight(74);
+                                $drawing->setWorksheet($sheet);
+                            }elseif($url!==''){
+                                $sheet->setCellValue($coord,$url);
+                                $sheet->getCell($coord)->getHyperlink()->setUrl($url);
+                                $sheet->getStyle($coord)->getFont()->setSize(9)->getColor()->setARGB('FF409EFF');
+                                $sheet->getStyle($coord)->getFont()->setUnderline(\PhpOffice\PhpSpreadsheet\Style\Font::UNDERLINE_SINGLE);
+                            }
+                            $sheet->setCellValue($qtyCoord,$qty);
+                            $sheet->getStyle($qtyCoord)->getFont()->setBold(true)->getColor()->setARGB('FFD40000');
+                        }
+                    }
+
+                    $applyBorder($start,$end);
+                    $cursor=$end+1;
+                }
+
+                $freightRow=$cursor;
+                $sheet->getRowDimension($freightRow)->setRowHeight(22);
+                $setCell($freightRow,2,'Freight');
+                $merge($freightRow,3,$freightRow,6)->setValue('');
+                $setCell($freightRow,7,$totalQty);
+                $setCell($freightRow,8,$freight);
+                $setCell($freightRow,9,$totalRmb);
+                $setCell($freightRow,10,$totalUsd);
+                $sheet->getStyle('A'.$freightRow.':J'.$freightRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle('H'.$freightRow.':J'.$freightRow)->getNumberFormat()->setFormatCode('#,##0.00');
+                $applyBorder($freightRow,$freightRow);
+                $cursor++;
+
+                $sumStart=$cursor+1;
+                $merge($sumStart,7,$sumStart,8)->setValue('TOTAL');
+                $setCell($sumStart,9,$totalWithFreight);
+                $merge($sumStart+1,7,$sumStart+1,8)->setValue('DEPOSIT');
+                $setCell($sumStart+1,9,$deposit);
+                $merge($sumStart+2,7,$sumStart+2,8)->setValue('BALANCE');
+                $setCell($sumStart+2,9,$balance);
+                for($r=$sumStart;$r<=$sumStart+2;$r++){
+                    $sheet->getRowDimension($r)->setRowHeight(22);
+                    $sheet->getStyle('G'.$r.':I'.$r)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
+                    $sheet->getStyle('G'.$r.':I'.$r)->getFont()->setBold(true);
+                    $sheet->getStyle('I'.$r)->getNumberFormat()->setFormatCode('#,##0.00');
+                    $sheet->getStyle('G'.$r.':J'.$r)->applyFromArray([
+                        'borders'=>[
+                            'allBorders'=>[
+                                'borderStyle'=>Border::BORDER_THIN,
+                                'color'=>['argb'=>'FF333333']
+                            ]
+                        ]
+                    ]);
+                }
+                $sheet->getStyle('I'.($sumStart+1))->getFont()->getColor()->setARGB('FFD40000');
+                $merge($sumStart,10,$sumStart+2,10)->setValue($exchangeRate?('1USD='.$exchangeRate.'RMB'):'');
+                $sheet->getStyle('J'.$sumStart)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+                $sheet->getStyle('J'.$sumStart)->getFont()->setSize(10)->getColor()->setARGB('FF909399');
+            }else{
+                $metaRows=isset($input['metaRows'])?$input['metaRows']:[];
+                $header=isset($input['header'])?$input['header']:[];
+                $rows=isset($input['rows'])?$input['rows']:[];
+                is_array($metaRows)||($metaRows=$decodeJson($metaRows));
+                is_array($header)||($header=$decodeJson($header));
+                is_array($rows)||($rows=$decodeJson($rows));
+                $r=1;
+                foreach($metaRows as $mr){
+                    is_array($mr)||($mr=[]);
+                    $label=isset($mr[0])?strval($mr[0]):'';
+                    $value=isset($mr[1])?strval($mr[1]):'';
+                    if($label=='' && $value=='') continue;
+                    $setCell($r,1,$label);
+                    $setCell($r,2,$value);
+                    $r++;
+                }
+                if($r>1) $r++;
+                if(!empty($header)){
+                    $c=1;
+                    foreach($header as $h){
+                        $setCell($r,$c,$h===null?'':strval($h));
+                        $c++;
+                    }
+                    $sheet->getStyle('A'.$r.':'.chr(64+max(1,count($header))).$r)->getFont()->setBold(true);
+                    $r++;
+                }
+                foreach($rows as $row){
+                    if(!is_array($row)) continue;
+                    $c=1;
+                    foreach($row as $cell){
+                        $setCell($r,$c,$cell===null?'':$cell);
+                        $c++;
+                    }
+                    $r++;
+                }
+            }
+
+            $writer=new XlsxWriter($spreadsheet);
+            ob_start();
+            $writer->save('php://output');
+            $binary=ob_get_clean();
+            foreach($tmpFiles as $p){
+                @unlink($p);
+            }
+            $encoded=rawurlencode($fileName);
+            return response($binary,200,[
+                'Content-Type'=>'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Content-Disposition'=>"attachment; filename*=UTF-8''".$encoded,
+                'Cache-Control'=>'max-age=0'
+            ]);
+        }catch(\Exception $e){
+            foreach($tmpFiles as $p){
+                @unlink($p);
+            }
+            return json(['state'=>'error','info'=>$e->getMessage()]);
+        }
     }
     
     //扩展字段文件上传

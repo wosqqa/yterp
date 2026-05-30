@@ -16,11 +16,11 @@ class Sre extends Acl{
                 ['people','fullEq'],
                 [['startTime'=>'time'],'startTime'],
                 [['endTime'=>'time'],'endTime'],
-                ['examine','fullDec1'],
-                ['nucleus','fullDec1'],
-                ['cse','fullDec1'],
-                ['invoice','fullDec1'],
-                ['check','fullDec1'],
+                ['examine','fullEq0'],
+                ['nucleus','fullEq0'],
+                ['cse','fullEq0'],
+                ['invoice','fullEq0'],
+                ['check','fullEq0'],
                 ['data','fullLike']
             ]);//构造SQL
             //商品信息扩展查询
