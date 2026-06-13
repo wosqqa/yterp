@@ -28,6 +28,10 @@ class Sell extends Acl{
                 $goods=array_column(Db::name('goods')->where([['name|py','like','%'.$input['goods'].'%']])->select()->toArray(),'id');
                 $sql[]=['id','in',array_column(Db::name('sell_info')->where([['goods','in',$goods]])->select()->toArray(),'pid')];
             }
+            $range=array_key_exists('totalRange',$input)?$input['totalRange']:(array_key_exists('totalMin',$input)?$input['totalMin']:null);
+            list($minTotal,$maxTotal)=parseMoneyRange($range);
+            $minTotal===null || ($sql[]=['total','>=',$minTotal]);
+            $maxTotal===null || ($sql[]=['total','<=',$maxTotal]);
             $sql=frameScope($sql);//组织数据
             $sql=sqlAuth('sell',$sql);//数据鉴权
             $count = Sells::where($sql)->count();//获取总条数

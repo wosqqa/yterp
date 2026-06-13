@@ -2,7 +2,7 @@
 namespace app\controller;
 use app\controller\Acl;
 use app\model\{Sor as Sors,SorInfo,Goods};
-use think\facade\{Db,Filesystem};
+use think\facade\{Db,Filesystem,Env};
 use think\exception\ValidateException;
 class Sor extends Acl{
     //列表
@@ -27,6 +27,10 @@ class Sor extends Acl{
                 $goods=array_column(Db::name('goods')->where([['name|py','like','%'.$input['goods'].'%']])->select()->toArray(),'id');
                 $sql[]=['id','in',array_column(Db::name('sor_info')->where([['goods','in',$goods]])->select()->toArray(),'pid')];
             }
+            $range=array_key_exists('totalRange',$input)?$input['totalRange']:(array_key_exists('totalMin',$input)?$input['totalMin']:null);
+            list($minTotal,$maxTotal)=parseMoneyRange($range);
+            $minTotal===null || ($sql[]=['total','>=',$minTotal]);
+            $maxTotal===null || ($sql[]=['total','<=',$maxTotal]);
             $sql=frameScope($sql);//组织数据
             $sql=sqlAuth('sor',$sql);//数据鉴权
             $count = Sors::where($sql)->count();//获取总条数
@@ -94,6 +98,7 @@ class Sor extends Acl{
             Db::startTrans();
             try {
                 //CLASS数据
+                $isCreate=empty($class['id']);
                 if(empty($class['id'])){
                     //创建数据
                     $createInfo=Sors::create($class);
@@ -109,9 +114,19 @@ class Sor extends Acl{
                 
                 //INFO数据
                 SorInfo::where([['pid','=',$class['id']]])->delete();
+                $allow=[
+                    'source','goods','attr','unit','warehouse',
+                    'price','nums','discount','dsc','total','tax','tat','tpt','data'
+                ];
+                $allow=array_flip($allow);
                 foreach ($input['info'] as $infoKey=>$infoVo) {
-                    $input['info'][$infoKey]['pid']=$class['id'];
-                    $input['info'][$infoKey]['handle']=0;//初始|出库数量
+                    is_array($infoVo) || ($infoVo=[]);
+                    $row=array_intersect_key($infoVo,$allow);
+                    unset($row['id'],$row['pid'],$row['handle']);
+                    $row['pid']=$class['id'];
+                    $row['handle']=0;//初始|出库数量
+                    $isCreate && ($row['source']=0);
+                    $input['info'][$infoKey]=$row;
                 }
                 $model = new SorInfo;
                 $model->saveAll($input['info']);
@@ -120,7 +135,8 @@ class Sor extends Acl{
             	$result=['state'=>'success','info'=>$class['id']];
             } catch (\Exception $e) {
             	Db::rollback();
-            	$result=['state'=>'error','info'=>'内部错误,操作已撤销!'];
+                $msg=Env::get('APP_DEBUG') ? $e->getMessage() : '内部错误,操作已撤销!';
+            	$result=['state'=>'error','info'=>$msg];
             }
         }else{
             $result=['state'=>'error','info'=>'传入参数不完整!'];

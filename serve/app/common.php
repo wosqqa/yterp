@@ -645,6 +645,26 @@ function fastSql($arr,$config) {
     }
     return array_unique($sql,SORT_REGULAR);
 }
+//解析金额区间
+//10000 => [10000,null]
+//10000/20000 => [10000,20000]
+///20000 => [null,20000]
+function parseMoneyRange($value){
+    if($value === null || $value === '' || $value === 'null'){
+        return [null,null];
+    }
+    $text=trim((string)$value);
+    $text=str_replace([' ','　',',','，','／'],['','','','','/'],$text);
+    $parts=explode('/',$text,2);
+    $min=(isset($parts[0]) && $parts[0] !== '')?(float)$parts[0]:null;
+    $max=(isset($parts[1]) && $parts[1] !== '')?(float)$parts[1]:null;
+    if($min !== null && $max !== null && $min > $max){
+        $cache=$min;
+        $min=$max;
+        $max=$cache;
+    }
+    return [$min,$max];
+}
 //递归获取指定ID树状数组结构
 function findTreeArr($mode,$data,$field = false) {
     $tree = [];
