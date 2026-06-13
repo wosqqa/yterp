@@ -12,14 +12,14 @@
 					<el-form-item>
 						<el-select v-model="searchFrom.category" placeholder="请选择客户类别" clearable>
 							<template v-for="category in store.sys.crCategory">
-								<el-option :label="category" :value="category"></el-option>
+								<el-option :key="category" :label="category" :value="category"></el-option>
 							</template> 
 						  </el-select>
 					</el-form-item>
 					<el-form-item>
 						<el-select v-model="searchFrom.grade" placeholder="请选择客户等级" clearable>
 							<template v-for="grade in store.sys.crGrade">
-								<el-option :label="grade" :value="grade"></el-option>
+								<el-option :key="grade" :label="grade" :value="grade"></el-option>
 							</template>
 						  </el-select>
 					</el-form-item>
@@ -81,7 +81,7 @@
 		<el-pagination class="tablePagination" :current-page.sync="page.current" :total="page.total" :page-size.sync="page.size"
 		 :page-sizes="page.sizes" :pager-count="page.count" @size-change="record(1)" @current-change="record(0)" layout="prev,pager,next,jumper,sizes,total">
 		</el-pagination>
-		<el-dialog class="tabsDialog" :visible.sync="dialog.show" title="详情" width="700px" v-madeDialog>
+		<el-dialog class="tabsDialog" :visible.sync="dialog.show" title="详情" width="70%" v-madeDialog>
 			<transition name="el-fade-in">
 				<template v-if="dialog.show">
 					<el-form :model="form" :rules="rules" ref="form" label-width="96px"  :inline="true">
@@ -102,14 +102,14 @@
 								<el-form-item label="客户类别">
 									<el-select v-model="form.category" placeholder="请选择客户类别">
 										<template v-for="category in store.sys.crCategory">
-											<el-option :label="category" :value="category"></el-option>
+											<el-option :key="category" :label="category" :value="category"></el-option>
 										</template>
 									  </el-select>
 								</el-form-item>
 								<el-form-item label="客户等级">
 									<el-select v-model="form.grade" placeholder="请选择客户等级">
 										<template v-for="grade in store.sys.crGrade">
-											<el-option :label="grade" :value="grade"></el-option>
+											<el-option :key="grade" :label="grade" :value="grade"></el-option>
 										</template>
 									  </el-select>
 								</el-form-item>
@@ -138,12 +138,13 @@
 									<el-table-column prop="add" label="联系地址" align="center" width="160px"></el-table-column>
 									<el-table-column prop="data" label="备注信息" align="center" min-width="120px"></el-table-column>
 									<el-table-column prop="set" align="center" width="160px" fixed="right">
-										<template slot-scope="scope" slot="header">
+										<template slot="header">
 											<span style="margin-right:3px;">相关操作</span>
 											<i class="el-icon-circle-plus-outline" @click="setContacts(-1)"></i>
 										</template>
 										<template slot-scope="scope">
 											<el-button-group>
+												<el-button @click="copyContacts(scope.row)" size="mini">复制</el-button>
 												<el-button @click="setContacts(scope.$index)" size="mini">详情</el-button>
 												<el-button @click="delContacts(scope.$index)" size="mini">删除</el-button>
 											</el-button-group>
@@ -347,6 +348,50 @@
 			}
 		},
 		methods: {
+			copyText(text) {
+				const val = text == null ? "" : String(text);
+				if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+					return navigator.clipboard.writeText(val);
+				}
+				return new Promise((resolve, reject) => {
+					try {
+						const el = document.createElement("textarea");
+						el.value = val;
+						el.setAttribute("readonly", "");
+						el.style.position = "fixed";
+						el.style.opacity = "0";
+						el.style.left = "-9999px";
+						el.style.top = "0";
+						document.body.appendChild(el);
+						el.select();
+						el.setSelectionRange(0, el.value.length);
+						const ok = document.execCommand("copy");
+						document.body.removeChild(el);
+						ok ? resolve(true) : reject(new Error("copy failed"));
+					} catch (e) {
+						reject(e);
+					}
+				});
+			},
+			copyContacts(row) {
+				const r = row || {};
+				const mark = r.data == null ? "" : String(r.data);
+				const name = r.name == null ? "" : String(r.name);
+				const tel = r.tel == null ? "" : String(r.tel);
+				const add = r.add == null ? "" : String(r.add);
+				const text = ["唛头：" + mark, "联系人:" + name + "+" + tel, "地址：" + add].join("\n");
+				this.copyText(text).then(() => {
+					this.$message({
+						type: "success",
+						message: "复制成功!"
+					});
+				}).catch(() => {
+					this.$message({
+						type: "warning",
+						message: "复制失败,请手动复制!"
+					});
+				});
+			},
 			//获取数据
 			record(page) {
 				page==0||(this.page.current=page);

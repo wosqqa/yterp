@@ -9,7 +9,7 @@
 					<el-form-item>
 						<el-select v-model="searchFrom.warehouse" placeholder="请选择仓库信息" multiple collapse-tags>
 							<template v-for="warehouse in store.warehouse">
-								<el-option :label="warehouse.name" :value="warehouse.id"></el-option>
+								<el-option :key="warehouse.id" :label="warehouse.name" :value="warehouse.id"></el-option>
 							</template>
 						</el-select>
 					</el-form-item>
@@ -118,6 +118,7 @@
 					sizes: [30, 60, 90, 150, 300],
 					count: 5,
 					status:[
+						{text:'汇总数量',type:'sum',key:'summary.nums'},
 						{text:'销售总金额',type:'sum',key:'sell.money'},
 						{text:'销售退货总金额',type:'sum',key:'sre.money'},
 						{text:'汇总金额',type:'sum',key:'summary.money'},

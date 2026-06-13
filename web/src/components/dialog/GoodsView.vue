@@ -74,6 +74,7 @@
               @keyup.enter.native="record(1)"
             ></el-input>
             <el-input
+              ref="comboInput"
               class="toolbarItem"
               placeholder="商品组合"
               v-model="searchFrom.data"
@@ -95,10 +96,8 @@
                 v-for="item in tableData"
                 :key="item.id"
                 class="goodsCard"
-                @click="pickOnce(item)"
-                @dblclick.stop="pickIncLast(item)"
               >
-                <div class="cardImg">
+                <div class="cardImg" @click.stop="onCardImgClick(item)">
                   <el-image v-if="getImgUrl(item)" :src="getImgUrl(item)" fit="contain">
                     <div slot="error" class="imgError">
                       <i class="el-icon-picture-outline"></i>
@@ -108,7 +107,7 @@
                     <i class="el-icon-picture-outline"></i>
                   </div>
                 </div>
-                <div class="cardMeta">
+                <div class="cardMeta" @click.stop="onCardMetaClick(item)">
                   <span class="metaLeft">{{ item.number }}</span>
                   <span class="metaRight">{{ item.sell }}</span>
                 </div>
@@ -186,7 +185,8 @@ export default {
       batchNums: "",
       batchSelected: [],
       selectedLines: [],
-      syncing: false
+      syncing: false,
+      lastComboClickAt: 0
     };
   },
   created() {
@@ -237,6 +237,24 @@ export default {
     }
   },
   methods: {
+    onCardImgClick(item) {
+      this.pickIncLast(item);
+    },
+    onCardMetaClick(item) {
+      if (Date.now() - Number(this.lastComboClickAt || 0) < 500) return;
+      const text = item && item.data != null ? String(item.data).trim() : "";
+      if (!text) {
+        this.$message && this.$message({ type: "warning", message: "该商品未设置 data 字段!" });
+        this.lastComboClickAt = Date.now();
+        return;
+      }
+      this.searchFrom = Object.assign({}, this.searchFrom, { data: text });
+      this.lastComboClickAt = Date.now();
+      this.$nextTick(() => {
+        this.$refs.comboInput && this.$refs.comboInput.focus && this.$refs.comboInput.focus();
+      });
+      this.recordComboOnly(text);
+    },
     normalizeSelectedLine(item, fallbackLineId) {
       const goodsId = Number(item && item.id);
       if (!goodsId) return null;
@@ -357,6 +375,45 @@ export default {
             return (Number(b && b.id) || 0) - (Number(a && a.id) || 0);
           };
           list.sort(cmp);
+          this.tableData = list;
+          this.page.total = result.count;
+        } else if (result.state == "error") {
+          this.$message({ type: "warning", message: result.info });
+        } else {
+          this.$message({ type: "error", message: "[ ERROR ] 服务器响应超时!" });
+        }
+      });
+    },
+    recordComboOnly(dataText) {
+      const text = dataText != null ? String(dataText).trim() : "";
+      if (!text) return;
+      this.page.current = 1;
+      const parm = { page: 1, limit: this.page.size, data: text };
+      this.$axios.post(this.recordAction, parm).then(result => {
+        if (result.state == "success") {
+          for (let item of result.info) {
+            item.nums = "";
+            if (item.attr && item.attr.length > 0) {
+              for (let attr of item.attr) {
+                attr.nums = "";
+              }
+            }
+          }
+          const list = Array.isArray(result.info) ? result.info.slice() : [];
+          list.sort((a, b) => {
+            const sa = a && a.data != null ? String(a.data).trim() : "";
+            const sb = b && b.data != null ? String(b.data).trim() : "";
+            if (!sa && !sb) return (Number(b && b.id) || 0) - (Number(a && a.id) || 0);
+            if (!sa) return 1;
+            if (!sb) return -1;
+            const c = sa.localeCompare(sb, undefined, { numeric: true, sensitivity: "base" });
+            if (c !== 0) return c;
+            const na = a && a.number != null ? String(a.number).trim() : "";
+            const nb = b && b.number != null ? String(b.number).trim() : "";
+            const c2 = na.localeCompare(nb, undefined, { numeric: true, sensitivity: "base" });
+            if (c2 !== 0) return c2;
+            return (Number(b && b.id) || 0) - (Number(a && a.id) || 0);
+          });
           this.tableData = list;
           this.page.total = result.count;
         } else if (result.state == "error") {

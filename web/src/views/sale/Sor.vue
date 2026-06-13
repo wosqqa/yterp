@@ -38,6 +38,16 @@
             <el-button icon="el-icon-document-copy" @click="copyAsNew"></el-button>
           </template>
         </el-input>
+        <el-radio-group
+          v-model="sortMode"
+          size="mini"
+          style="margin-left: 8px"
+          @change="sortModeChange"
+        >
+          <el-radio-button label="warehouse">仓库排序</el-radio-button>
+          <el-radio-button label="category">分类排序</el-radio-button>
+          <el-radio-button label="packing">装箱排序</el-radio-button>
+        </el-radio-group>
       </el-form-item>
       <el-divider class="fistDivider"></el-divider>
       <ag-grid-vue
@@ -278,6 +288,11 @@ export default {
           required: true,
           message: "请输入单据编号",
           trigger: "blur",
+        },
+        arrival: {
+          required: true,
+          message: "请选择到货日期",
+          trigger: "change",
         },
         actual: [
           {
@@ -572,6 +587,7 @@ export default {
       goodsViewSyncingFromView: false,
       goodsViewSyncingFromGrid: false,
       picVisible: false,
+      sortMode: "",
     };
   },
   computed: {
@@ -601,11 +617,25 @@ export default {
       const priceType = "sell";
       const unitData = Array.isArray(goods.units) ? goods.units : [];
       const unitVal = goods.unit == null ? "" : goods.unit;
+      const categoryId =
+        goods.category != null
+          ? Number(goods.category)
+          : goods.categoryData && goods.categoryData.id != null
+          ? Number(goods.categoryData.id)
+          : 0;
+      const categoryName =
+        goods.categoryData && goods.categoryData.name != null
+          ? String(goods.categoryData.name)
+          : "";
+      const goodsCombo = goods.data != null ? String(goods.data) : "";
       const row = {
         uniqid: this.$lib.getUniqid(),
         key: goods.id,
         goodsType: goods.type,
         imgs: goods.imgs,
+        categoryId,
+        categoryName,
+        goodsCombo,
         unitData,
         unitRelation: {
           valence: goods[priceType],
@@ -631,6 +661,75 @@ export default {
         data: "",
       };
       return row;
+    },
+    sortModeChange() {
+      this.sortGrid(this.sortMode);
+    },
+    sortGrid(mode) {
+      const api = this.grid && this.grid.options ? this.grid.options.api : null;
+      if (!api) return;
+      api.stopEditing && api.stopEditing();
+      const rows = this.$grid.getGridData(this.grid.options).filter((r) => r && r.key != null);
+      if (rows.length <= 1) return;
+
+      const textCmp = (a, b) => {
+        const sa = a == null ? "" : String(a).trim();
+        const sb = b == null ? "" : String(b).trim();
+        return sa.localeCompare(sb, undefined, { numeric: true, sensitivity: "base" });
+      };
+      const numCmp = (a, b) => {
+        const na = Number(a);
+        const nb = Number(b);
+        const va = Number.isFinite(na) ? na : 0;
+        const vb = Number.isFinite(nb) ? nb : 0;
+        return va - vb;
+      };
+      const numberTie = (a, b) => {
+        const c2 = textCmp(a && a.number, b && b.number);
+        if (c2 !== 0) return c2;
+        return textCmp(a && a.uniqid, b && b.uniqid);
+      };
+
+      const nextMode = String(mode || "");
+      const sorted = rows.slice().sort((a, b) => {
+        if (nextMode === "warehouse") {
+          const wa = a && a.warehouseId != null ? Number(a.warehouseId) : null;
+          const wb = b && b.warehouseId != null ? Number(b.warehouseId) : null;
+          if (wa == null && wb != null) return 1;
+          if (wa != null && wb == null) return -1;
+          if (wa != null && wb != null) {
+            const c = numCmp(wa, wb);
+            if (c !== 0) return c;
+          }
+          return numberTie(a, b);
+        }
+        if (nextMode === "category") {
+          const ca = a && a.categoryId != null ? Number(a.categoryId) : 0;
+          const cb = b && b.categoryId != null ? Number(b.categoryId) : 0;
+          if (!ca && cb) return 1;
+          if (ca && !cb) return -1;
+          if (ca && cb) {
+            const c = numCmp(ca, cb);
+            if (c !== 0) return c;
+          }
+          const c2 = textCmp(a && a.categoryName, b && b.categoryName);
+          return c2 !== 0 ? c2 : numberTie(a, b);
+        }
+        if (nextMode === "packing") {
+          const sa = a && a.goodsCombo != null ? String(a.goodsCombo).trim() : "";
+          const sb = b && b.goodsCombo != null ? String(b.goodsCombo).trim() : "";
+          if (!sa && sb) return 1;
+          if (sa && !sb) return -1;
+          const c = textCmp(sa, sb);
+          return c !== 0 ? c : numberTie(a, b);
+        }
+        return numberTie(a, b);
+      });
+
+      api.setRowData(sorted);
+      this.$grid.addGridRow(this.grid.options);
+      this.handleGrid();
+      this.goodsViewValue = this.getGoodsViewSelected();
     },
     syncGridFromGoodsView(selection) {
       const api = this.grid.options.api;
@@ -729,6 +828,7 @@ export default {
     init() {
       if (this.source == null) {
         this.form.time = this.$moment().format("YYYY-MM-DD");
+        this.form.arrival = this.$moment(this.form.time).add(3, "days").format("YYYY-MM-DD");
         this.form.number = "XSDD" + this.$moment().format("YYMMDDHHmmssS");
       } else {
         this.$axios.post("sor/get", { parm: this.source }).then((result) => {
@@ -753,7 +853,7 @@ export default {
     save() {
       let form = this.$refs["form"];
       this.$lib
-        .aloneValidate(form, ["customer", "time", "number"])
+        .aloneValidate(form, ["customer", "time", "number", "arrival"])
         .then(() => {
           let effect = this.handleGrid();
           if (effect == true) {
@@ -868,90 +968,75 @@ export default {
         });
     },
     copyAsNew() {
-      const form = this.$refs["form"];
-      const api = this.grid && this.grid.options ? this.grid.options.api : null;
+      const options = this.grid && this.grid.options ? this.grid.options : null;
+      const api = options ? options.api : null;
+      const columnApi = options ? options.columnApi : null;
       api && api.stopEditing && api.stopEditing();
-      this.$lib
-        .aloneValidate(form, ["customer", "time"])
-        .then(() => {
-          const effect = this.handleGrid();
-          if (effect !== true) {
-            this.$message({ type: "warning", message: effect });
-            return;
-          }
-          if (this.info.length === 0) {
-            this.$message({ type: "warning", message: "商品信息不可为空!" });
-            return;
-          }
-          this.$lib
-            .aloneValidate(form, ["actual"])
-            .then(() => {
-              if (this.form.actual - 0 > this.form.total - 0) {
-                this.$message({ type: "warning", message: "实际金额不可大于单据金额!" });
-                return;
-              }
-              form.validate((valid) => {
-                if (!valid) {
-                  this.$message({ type: "warning", message: "表单验证错误,请检查并修正!" });
-                  return;
-                }
+      if (!options || !api) {
+        this.$message({ type: "warning", message: "表格尚未加载完成,请稍后重试!" });
+        return;
+      }
+      const effect = this.handleGrid();
+      if (effect !== true) {
+        this.$message({ type: "warning", message: effect });
+        return;
+      }
 
-                const nextNumber = "XSDD" + this.$moment().format("YYMMDDHHmmssS");
-                const classCopy = this.$lib.extend(true, {}, this.form);
-                classCopy.id = 0;
-                classCopy.examine = 0;
-                classCopy.state = 0;
-                classCopy.number = nextNumber;
-                classCopy.time = classCopy.time || this.$moment().format("YYYY-MM-DD");
+      const rows = this.$grid.getGridData(options).filter((r) => r && r.key != null);
+      if (rows.length === 0) {
+        this.$message({ type: "warning", message: "商品信息不可为空!" });
+        return;
+      }
 
-                [
-                  "frameData",
-                  "customerData",
-                  "peopleData",
-                  "userData",
-                  "recordData",
-                  "relation",
-                  "extension",
-                ].forEach((k) => {
-                  classCopy[k] != null && delete classCopy[k];
-                });
+      const preserve = {
+        actual: this.form.actual,
+        people: this.form.people,
+        arrival: this.form.arrival,
+        logistics: this.$lib.extend(true, {}, this.form.logistics),
+        file: this.$lib.extend(true, [], this.form.file || []),
+        more: this.$lib.extend(true, {}, this.form.more),
+        data: this.form.data,
+      };
+      const nextNumber = "XSDD" + this.$moment().format("YYMMDDHHmmssS");
+      const nextTime = this.form.time || this.$moment().format("YYYY-MM-DD");
+      const nextCustomer = this.form.customer != null ? this.form.customer : null;
+      const nextArrival = preserve.arrival
+        ? preserve.arrival
+        : this.$moment(nextTime).add(3, "days").format("YYYY-MM-DD");
 
-                const infoCopy = (this.info || []).map((it) => Object.assign({}, it));
+      this.$set(this, "form", {
+        id: 0,
+        customer: nextCustomer,
+        time: nextTime,
+        number: nextNumber,
+        total: 0,
+        actual: preserve.actual,
+        people: preserve.people,
+        arrival: nextArrival,
+        logistics: preserve.logistics,
+        file: preserve.file,
+        data: preserve.data,
+        examine: 0,
+        state: 0,
+        more: preserve.more,
+      });
 
-                this.$axios
-                  .post("sor/save", {
-                    class: classCopy,
-                    info: infoCopy,
-                  })
-                  .then((result) => {
-                    if (result.state == "success") {
-                      const newId = result.info;
-                      this.$set(this, "form", Object.assign({}, classCopy, { id: newId }));
-                      this.$message({
-                        type: "success",
-                        message: "复制成功,新单编号: " + nextNumber,
-                      });
-                      if (this.store.sys.fun.examine) {
-                        this.$message({ type: "success", message: "审核单据中..." });
-                        setTimeout(() => {
-                          this.examine();
-                        }, 996);
-                      }
-                    } else if (result.state == "error") {
-                      this.$message({ type: "warning", message: result.info });
-                    } else {
-                      this.$message({ type: "error", message: "[ ERROR ] 服务器响应超时!" });
-                    }
-                  });
-              });
-            })
-            .catch((message) => {
-              this.$message({ type: "warning", message: message });
-            });
-        })
-        .catch((message) => {
-          this.$message({ type: "warning", message: message });
-        });
+      const nextRows = rows.map((r) => {
+        const row = Object.assign({}, r);
+        row.uniqid = this.$lib.getUniqid();
+        row.source = 0;
+        row.handle != null && delete row.handle;
+        return row;
+      });
+
+      api.setRowData(nextRows);
+      this.$grid.addGridRow(options);
+      columnApi && columnApi.setColumnVisible && columnApi.setColumnVisible("handle", false);
+      this.handleGrid();
+      this.$message({
+        type: "success",
+        message: "已复制商品到新单,新单编号: " + nextNumber,
+      });
     },
     //开启|关闭
     update() {
@@ -1149,11 +1234,25 @@ export default {
       let priceType = "sell";
       for (let item of items) {
         let goods = scene ? item : item.goodsData;
+        const categoryId =
+          goods && goods.category != null
+            ? Number(goods.category)
+            : goods && goods.categoryData && goods.categoryData.id != null
+            ? Number(goods.categoryData.id)
+            : 0;
+        const categoryName =
+          goods && goods.categoryData && goods.categoryData.name != null
+            ? String(goods.categoryData.name)
+            : "";
+        const goodsCombo = goods && goods.data != null ? String(goods.data) : "";
         let row = {
           uniqid: this.$lib.getUniqid(),
           key: goods.id,
           goodsType: goods.type,
           imgs: goods.imgs,
+          categoryId,
+          categoryName,
+          goodsCombo,
           unitData: Array.isArray(goods.units) ? goods.units : [],
           unitRelation: {
             valence: goods[priceType],
@@ -1228,7 +1327,10 @@ export default {
     //数据表格验证
     handleGrid() {
       let effect = true;
-      let data = this.$grid.getGridData(this.grid.options);
+      const options = this.grid ? this.grid.options : null;
+      const api = options ? options.api : null;
+      if (!options || !api) return "表格尚未加载完成,请稍后重试!";
+      let data = this.$grid.getGridData(options);
       for (var i = 0; i < data.length; i++) {
         if (data[i].key == null) {
           data.splice(i, 1);
@@ -1283,7 +1385,7 @@ export default {
               .chain(data[i].total)
               .add(data[i].tat)
               .done();
-            this.grid.options.api.applyTransaction({ update: [data[i]] });
+            api.applyTransaction({ update: [data[i]] });
           }
         }
       }
@@ -1356,12 +1458,12 @@ export default {
     },
   },
   mounted() {
-    this.source && this.grid.options.columnApi.setColumnVisible("handle", true);
-    this.store.sys.fun.tax &&
-      this.grid.options.columnApi.setColumnsVisible(
-        ["tax", "tat", "tpt"],
-        true
-      );
+    this.$nextTick(() => {
+      const columnApi = this.grid && this.grid.options ? this.grid.options.columnApi : null;
+      if (!columnApi) return;
+      this.source && columnApi.setColumnVisible("handle", true);
+      this.store.sys.fun.tax && columnApi.setColumnsVisible(["tax", "tat", "tpt"], true);
+    });
   },
 };
 </script>

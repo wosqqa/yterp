@@ -106,6 +106,13 @@
               clearable
             ></el-input>
           </el-form-item>
+          <el-form-item>
+            <el-input
+              placeholder="单据金额 例:10000/20000"
+              v-model="searchFrom.totalRange"
+              clearable
+            ></el-input>
+          </el-form-item>
           <el-divider></el-divider>
           <el-button
             class="searchBtn"
@@ -225,6 +232,12 @@
         </template>
       </el-table-column>
       <el-table-column
+        prop="data"
+        label="备注信息"
+        align="center"
+        min-width="200px"
+      ></el-table-column>
+      <el-table-column
         prop="total"
         label="单据金额"
         align="center"
@@ -265,12 +278,6 @@
         label="制单人"
         align="center"
         width="120px"
-      ></el-table-column>
-      <el-table-column
-        prop="data"
-        label="备注信息 "
-        align="center"
-        min-width="200px"
       ></el-table-column>
       <el-table-column
         prop="set"
@@ -467,6 +474,7 @@ export default {
         examine: 0,
         state: "",
         data: "",
+        totalRange: "",
       },
       tableData: [],
       tableSelection: [],

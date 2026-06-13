@@ -123,6 +123,13 @@
               clearable
             ></el-input>
           </el-form-item>
+          <el-form-item>
+            <el-input
+              placeholder="单据金额 例:10000/20000"
+              v-model="searchFrom.totalRange"
+              clearable
+            ></el-input>
+          </el-form-item>
           <el-divider></el-divider>
           <el-button
             class="searchBtn"
@@ -186,7 +193,13 @@
         label="客户"
         align="center"
         width="160px"
-      ></el-table-column>
+      >
+        <template slot-scope="scope">
+          <span @click="openCustomer(scope.row)">{{
+            $lib.objectSeek(scope.row, "customerData|name") || ""
+          }}</span>
+        </template>
+      </el-table-column>
       <el-table-column
         prop="time"
         label="单据时间"
@@ -244,6 +257,12 @@
           </template>
         </template>
       </el-table-column>
+      <el-table-column
+        prop="data"
+        label="备注信息"
+        align="center"
+        min-width="200px"
+      ></el-table-column>
       <el-table-column
         prop="total"
         label="单据金额"
@@ -447,12 +466,6 @@
         width="120px"
       ></el-table-column>
       <el-table-column
-        prop="data"
-        label="备注信息 "
-        align="center"
-        min-width="200px"
-      ></el-table-column>
-      <el-table-column
         prop="set"
         label="相关操作"
         align="center"
@@ -617,6 +630,7 @@
         </template>
       </transition>
     </el-dialog>
+    <CustomerDetail v-model="customer.dialog" :id="customer.id" @saved="record(0)"></CustomerDetail>
   </div>
 </template>
 <script>
@@ -624,6 +638,7 @@ import Sell from "@/views/sale/Sell";
 import Sor from "@/views/sale/Sor";
 import Sre from "@/views/sale/Sre";
 import SorPrint from "@/views/sale/SorPrint";
+import CustomerDetail from "@/components/dialog/CustomerDetail";
 import NodList from "@/components/lib/NodList";
 import PageStatus from "@/components/lib/PageStatus";
 
@@ -634,6 +649,7 @@ export default {
     Sor,
     Sre,
     SorPrint,
+    CustomerDetail,
     NodList,
     PageStatus,
   },
@@ -653,6 +669,7 @@ export default {
         invoice: "",
         check: "",
         data: "",
+        totalRange: "",
       },
       tableData: [],
       tableSelection: [],
@@ -686,6 +703,10 @@ export default {
       batch: {
         dialog: false,
         active: "import",
+      },
+      customer: {
+        dialog: false,
+        id: 0,
       },
     };
   },
@@ -737,6 +758,22 @@ export default {
     billShow(id) {
       this.bill.source = id;
       this.bill.dialog = true;
+    },
+    openCustomer(row) {
+      const customerId =
+        row && row.customer != null
+          ? Number(row.customer)
+          : row && row.customerData && row.customerData.id != null
+          ? Number(row.customerData.id)
+          : row && row.customerData && row.customerData.key != null
+          ? Number(row.customerData.key)
+          : 0;
+      if (!customerId) {
+        this.$message({ type: "warning", message: "客户信息不可为空!" });
+        return;
+      }
+      this.customer.id = customerId;
+      this.customer.dialog = true;
     },
     copyBill(id) {
       if (!id) return;

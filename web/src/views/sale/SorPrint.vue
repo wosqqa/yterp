@@ -615,7 +615,7 @@ export default {
         if (fa && fb) return na - nb;
         if (fa) return -1;
         if (fb) return 1;
-        return sa.localeCompare(sb);
+        return sa.localeCompare(sb, undefined, { numeric: true, sensitivity: "base" });
       };
       const sortPackKey = (a, b) => {
         const sa = a == null ? "" : String(a).trim();
@@ -630,7 +630,7 @@ export default {
         if (fa && fb) return na - nb;
         if (fa) return -1;
         if (fb) return 1;
-        return sa.localeCompare(sb);
+        return sa.localeCompare(sb, undefined, { numeric: true, sensitivity: "base" });
       };
       const rowMap = {};
       baseRows.forEach(r => (rowMap[r.key] = r));
@@ -692,7 +692,7 @@ export default {
         if (!sa && !sb) return 0;
         if (!sa) return 1;
         if (!sb) return -1;
-        return sa.localeCompare(sb);
+        return sa.localeCompare(sb, undefined, { numeric: true, sensitivity: "base" });
       };
       return order
         .slice()

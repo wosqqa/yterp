@@ -11,11 +11,11 @@ function getApiBase() {
       const host = window.location.hostname || "127.0.0.1";
       const protocol = window.location.protocol || "http:";
       const port = window.location.port || "";
-      if (String(port) === "8080" || String(port) === "8083") return `${protocol}//${host}:3000/`;
-      return `${protocol}//${host}${port ? ":" + port : ""}/`;
+      if (String(port) === "8083") return `${protocol}//${host}:3000/`;
+      return `${protocol}//${host}:8000/`;
     }
   } catch (e) {}
-  return "http://127.0.0.1:3000/";
+  return "http://127.0.0.1:8000/";
 }
 
 Vue.prototype.$base = {
