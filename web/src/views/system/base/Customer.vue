@@ -7,7 +7,7 @@
 						<el-input placeholder="请输入客户名称" v-model="searchFrom.name" clearable></el-input>
 					</el-form-item>
 					<el-form-item>
-						<el-input placeholder="请输入客户编号" v-model="searchFrom.number" clearable></el-input>
+						<el-input placeholder="请输入客户编号" v-model="searchFrom.number" clearable @input="onSearchNumberInput"></el-input>
 					</el-form-item>
 					<el-form-item>
 						<el-select v-model="searchFrom.category" placeholder="请选择客户类别" clearable>
@@ -85,13 +85,13 @@
 			<transition name="el-fade-in">
 				<template v-if="dialog.show">
 					<el-form :model="form" :rules="rules" ref="form" label-width="96px"  :inline="true">
-						<el-tabs v-model="dialog.active">
+						<el-tabs v-model="dialog.active" @tab-click="tabChange">
 							<el-tab-pane label="基础资料" name="base">
 								<el-form-item label="客户名称" prop="name">
 									<el-input placeholder="请输入客户名称" v-model="form.name" clearable></el-input>
 								</el-form-item>
 								<el-form-item label="客户编号" prop="number">
-									<el-input placeholder="请输入客户编号" v-model="form.number" clearable></el-input>
+									<el-input placeholder="请输入客户编号" v-model="form.number" clearable @input="onFormNumberInput"></el-input>
 								</el-form-item>
 								<el-form-item label="所属组织" prop="frame">
 									<nodTree v-model="form.frame" :treeData="store.frame" placeholder="请选择所属组织"></nodTree>
@@ -135,7 +135,11 @@
 									</el-table-column>
 									<el-table-column prop="name" label="联系人员" align="center" width="120px"></el-table-column>
 									<el-table-column prop="tel" label="联系号码" align="center" width="120px"></el-table-column>
-									<el-table-column prop="add" label="联系地址" align="center" width="160px"></el-table-column>
+									<el-table-column prop="add" label="联系地址" align="center" width="160px">
+										<template slot-scope="scope">
+											<span class="addressLink" @click.stop="openAmapAddress(scope.row.add)">{{ scope.row.add }}</span>
+										</template>
+									</el-table-column>
 									<el-table-column prop="data" label="备注信息" align="center" min-width="120px"></el-table-column>
 									<el-table-column prop="set" align="center" width="160px" fixed="right">
 										<template slot="header">
@@ -179,6 +183,57 @@
 									</span>
 								</el-dialog>
 							</el-tab-pane>
+							<el-tab-pane label="完成订单" name="orders">
+								<div class="ordersPane">
+									<el-table
+										:data="orders.tableData"
+										height="320px"
+										border
+										v-loading="orders.loading"
+									>
+										<el-table-column prop="bill" label="单据类型" align="center" width="90px"></el-table-column>
+										<el-table-column prop="time" label="单据时间" align="center" width="120px"></el-table-column>
+										<el-table-column prop="number" label="单据编号" align="center" width="180px">
+											<template slot-scope="scope">
+												<span class="orderNumberLink" @click.stop="openOrderPreview(scope.row)">{{ scope.row.number }}</span>
+											</template>
+										</el-table-column>
+										<el-table-column prop="total" label="单据金额" align="center" width="120px"></el-table-column>
+										<el-table-column prop="discount" label="优惠金额" align="center" width="120px"></el-table-column>
+										<el-table-column prop="actual" label="实际金额" align="center" width="120px"></el-table-column>
+										<el-table-column prop="act" label="成本" align="center" width="120px"></el-table-column>
+										<el-table-column prop="gpt" label="毛利润" align="center" width="120px"></el-table-column>
+										<el-table-column prop="gpr" label="毛利率" align="center" width="120px"></el-table-column>
+										<el-table-column prop="cost" label="单据费用" align="center" width="120px"></el-table-column>
+										<el-table-column prop="npt" label="净利润" align="center" width="120px"></el-table-column>
+										<el-table-column prop="npr" label="净利率" align="center" width="120px"></el-table-column>
+										<el-table-column prop="extension.amount" label="核销金额" align="center" width="120px"></el-table-column>
+										<el-table-column prop="extension.nucleus" label="核销状态" align="center" width="120px"></el-table-column>
+										<el-table-column prop="userData.name" label="制单人" align="center" width="120px"></el-table-column>
+										<el-table-column prop="peopleData.name" label="关联人员" align="center" width="120px"></el-table-column>
+										<el-table-column prop="data" label="备注信息" align="center" min-width="160px"></el-table-column>
+									</el-table>
+									<div class="ordersFooter">
+										<el-pagination
+											class="tablePagination orderPagination"
+											:current-page.sync="orders.page.current"
+											:total="orders.page.total"
+											:page-size.sync="orders.page.size"
+											:page-sizes="orders.page.sizes"
+											:pager-count="orders.page.count"
+											@size-change="recordOrders(1)"
+											@current-change="recordOrders(0)"
+											layout="prev,pager,next,jumper,sizes,total"
+										>
+										</el-pagination>
+										<div class="ordersSummaryBar">
+											<div class="ordersSummaryItem">总销售额：{{ orders.summary.salesText }}</div>
+											<div class="ordersSummaryItem">总利润：{{ orders.summary.profitText }}</div>
+											<div class="ordersSummaryItem">总利润率：{{ orders.summary.rateText }}</div>
+										</div>
+									</div>
+								</div>
+							</el-tab-pane>
 							<template v-if="store.fields.hasOwnProperty($route.name)">
 								<el-tab-pane label="扩展信息" name="more">
 									<FieldForm v-model="form.more" rule="customer" prefix="more."></FieldForm>
@@ -195,6 +250,7 @@
 				</template>
 			</span>
 		</el-dialog>
+		<OrderPreviewDialog v-model="print.dialog" :number="print.number" @closed="printDestroy"></OrderPreviewDialog>
 		<el-dialog class="tabsDialog" :visible.sync="batch.dialog" title="批量" width="420px" v-madeDialog>
 			<transition name="el-fade-in">
 				<template v-if="batch.dialog">
@@ -240,12 +296,14 @@
 	import NodTree from "@/components/lib/NodTree";
 	import NodList from "@/components/lib/NodList";
 	import FieldForm from "@/components/lib/FieldForm";
+	import OrderPreviewDialog from "@/components/dialog/OrderPreviewDialog";
 	export default {
 		name: "Customer",
 		components: {
 			NodTree,
 			NodList,
-			FieldForm
+			FieldForm,
+			OrderPreviewDialog
 		},
 		data() {
 			return {
@@ -271,6 +329,30 @@
 				dialog:{
 					show:false,
 					active:'base'
+				},
+				orders: {
+					loading: false,
+					loadedCustomerId: 0,
+					tableData: [],
+					summary: {
+						sales: 0,
+						profit: 0,
+						rate: "0.00%",
+						salesText: "0.00",
+						profitText: "0.00",
+						rateText: "0.00%"
+					},
+					page: {
+						current: 1,
+						total: 0,
+						size: 20,
+						sizes: [20, 40, 60, 100],
+						count: 5
+					}
+				},
+				print: {
+					dialog: false,
+					number: ""
 				},
 				form: {
 					id: 0,
@@ -348,6 +430,15 @@
 			}
 		},
 		methods: {
+			cleanCustomerNumber(text) {
+				return String(text == null ? "" : text).replace(/\s+/g, "");
+			},
+			onSearchNumberInput(val) {
+				this.searchFrom.number = this.cleanCustomerNumber(val);
+			},
+			onFormNumberInput(val) {
+				this.form.number = this.cleanCustomerNumber(val);
+			},
 			copyText(text) {
 				const val = text == null ? "" : String(text);
 				if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
@@ -392,6 +483,14 @@
 					});
 				});
 			},
+			openAmapAddress(address) {
+				const text = address == null ? "" : String(address).trim();
+				if (!text) {
+					this.$message({ type: "warning", message: "联系地址为空!" });
+					return;
+				}
+				window.open(`https://www.amap.com/search?query=${encodeURIComponent(text)}`, "_blank");
+			},
 			//获取数据
 			record(page) {
 				page==0||(this.page.current=page);
@@ -421,6 +520,8 @@
 			set(id) {
 				//1.初始化数据
 				this.form = this.$lib.extend(true, {}, this.$options.data().form);
+				this.orders = this.$lib.extend(true, {}, this.$options.data().orders);
+				this.dialog.active = 'base';
 				//2.请求数据
 				if (id > 0) {
 					this.$axios.post("customer/get", {
@@ -446,6 +547,100 @@
 					this.form.user=this.store.user.id;//赋值所属用户
 					this.dialog.show = true; //显示弹层
 				}
+			},
+			tabChange(tab) {
+				if (!tab || tab.name !== "orders") return;
+				this.recordOrders(1);
+			},
+			recordOrders(page) {
+				if (!this.form || !this.form.id) {
+					this.orders.tableData = [];
+					this.orders.page.total = 0;
+					this.orders.summary = this.$lib.extend(true, {}, this.$options.data().orders.summary);
+					return;
+				}
+				page == 0 || (this.orders.page.current = page);
+				const customerId = Number(this.form.id) || 0;
+				if (!customerId) return;
+				this.orders.loading = true;
+				const parm = {
+					page: this.orders.page.current,
+					limit: this.orders.page.size,
+					customer: customerId,
+					type: 0,
+					mold: ["sell", "sre"]
+				};
+				this.$axios.post("mrt/mpt", parm).then(result => {
+					if (result.state == "success") {
+						this.orders.tableData = Array.isArray(result.info) ? result.info : [];
+						this.orders.page.total = Number(result.count) || 0;
+						this.orders.loadedCustomerId = customerId;
+						const sum = result.sum || {};
+						const sales = Number(sum.sales);
+						const profit = Number(sum.profit);
+						const rate = typeof sum.rate === "string" ? sum.rate : "0.00%";
+						if (Number.isFinite(sales) && Number.isFinite(profit)) {
+							this.orders.summary.sales = sales;
+							this.orders.summary.profit = profit;
+							this.orders.summary.rate = rate;
+							this.orders.summary.salesText = sales.toFixed(2);
+							this.orders.summary.profitText = profit.toFixed(2);
+							this.orders.summary.rateText = rate;
+						} else {
+							const rows = this.orders.tableData.filter(r => r && r.bill);
+							const fallbackSales = rows.reduce((s, r) => s + Number(r.actual || 0), 0);
+							const fallbackProfit = rows.reduce((s, r) => s + Number(r.npt || 0), 0);
+							const fallbackRate = fallbackSales === 0 ? 0 : (fallbackProfit / fallbackSales) * 100;
+							this.orders.summary.sales = fallbackSales;
+							this.orders.summary.profit = fallbackProfit;
+							this.orders.summary.rate = `${fallbackRate.toFixed(2)}%`;
+							this.orders.summary.salesText = fallbackSales.toFixed(2);
+							this.orders.summary.profitText = fallbackProfit.toFixed(2);
+							this.orders.summary.rateText = this.orders.summary.rate;
+						}
+					} else if (result.state == "error") {
+						this.orders.tableData = [];
+						this.orders.page.total = 0;
+						this.orders.summary = this.$lib.extend(true, {}, this.$options.data().orders.summary);
+						this.$message({
+							type: "warning",
+							message: result.info
+						});
+					} else {
+						this.orders.tableData = [];
+						this.orders.page.total = 0;
+						this.orders.summary = this.$lib.extend(true, {}, this.$options.data().orders.summary);
+						this.$message({
+							type: "error",
+							message: "[ ERROR ] 服务器响应超时!"
+						});
+					}
+				}).finally(() => {
+					this.orders.loading = false;
+				});
+			},
+			openOrderPreview(row) {
+				const number = row && row.number != null ? String(row.number).trim() : "";
+				const mold = row && row.mold ? String(row.mold) : "";
+				const bill = row && row.bill ? String(row.bill) : "";
+				if (!number) {
+					this.$message({ type: "warning", message: "单据编号不存在!" });
+					return;
+				}
+				if (mold && mold !== "sell") {
+					this.$message({ type: "warning", message: "当前单据暂不支持订单预览!" });
+					return;
+				}
+				if (!mold && bill && bill !== "销售单") {
+					this.$message({ type: "warning", message: "当前单据暂不支持订单预览!" });
+					return;
+				}
+				this.print.number = number;
+				this.print.dialog = true;
+			},
+			printDestroy() {
+				this.print.dialog = false;
+				this.print.number = "";
 			},
 			//保存数据
 			save() {
@@ -627,5 +822,38 @@
 	.layout {
 		display: flex;
 		justify-content: space-between;
+	}
+	.ordersPane {
+		width: 100%;
+	}
+	.ordersFooter {
+		display: flex;
+		align-items: center;
+		margin-top: 10px;
+	}
+	.orderPagination {
+		margin-top: 0;
+	}
+	.ordersSummaryBar {
+		display: flex;
+		gap: 18px;
+		margin-left: 18px;
+		flex-wrap: wrap;
+	}
+	.ordersSummaryItem {
+		padding: 6px 12px;
+		border: 1px solid #dcdfe6;
+		border-radius: 4px;
+		background: #fff;
+		font-size: 12px;
+		color: #606266;
+	}
+	.orderNumberLink {
+		color: #409eff;
+		cursor: pointer;
+	}
+	.addressLink {
+		color: #409eff;
+		cursor: pointer;
 	}
 </style>

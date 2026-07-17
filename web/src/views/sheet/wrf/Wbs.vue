@@ -115,6 +115,7 @@
 					sizes: [30, 60, 90, 150, 300],
 					count: 5,
 					status:[
+						{text:'总数量',type:'sum',key:'balance.rawUns'},
 						{text:'总成本',type:'sum',key:'balance.bct'}
 					]
 				}

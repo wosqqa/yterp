@@ -256,7 +256,7 @@ export default {
         people: null,
         logistics: { key: "auto", name: "自动识别", number: "" },
         file: [],
-        data: "",
+        data: goods.data != null ? String(goods.data) : "",
         examine: 0,
         check: 0,
         more: {},
@@ -681,7 +681,7 @@ export default {
         tax: this.supplier.rate,
         tat: null,
         tpt: null,
-        data: "",
+        data: goods.data != null ? String(goods.data) : "",
       };
     },
     getGoodsViewSelected() {
@@ -696,11 +696,13 @@ export default {
       return rows.map((r) => {
         const unitData = Array.isArray(r.unitData) ? r.unitData : [];
         return {
+          lineId: r.uniqid,
           id: r.key,
           name: r.name,
           number: r.number,
           spec: r.spec,
           type: r.goodsType,
+          data: r.data,
           unit: unitData.length > 0 ? "-1" : r.unit,
           units: unitData,
           imgs: r.imgs,

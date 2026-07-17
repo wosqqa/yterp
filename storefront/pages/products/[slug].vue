@@ -45,22 +45,45 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useMockCatalog } from '../../composables/mockCatalog'
+import { fetchCatalogProductBySlug, type MockProduct } from '../../composables/mockCatalog'
 import { useCart } from '../../composables/cart'
 import { useI18n } from '../../composables/i18n'
 import { useMoney } from '../../composables/money'
 
 const route = useRoute()
 const router = useRouter()
-const { products } = useMockCatalog()
 const cart = useCart()
 const { t } = useI18n()
 const money = useMoney()
 
 const slug = computed(() => String(route.params.slug || ''))
-const product = computed(() => products.find(p => p.slug === slug.value) || null)
+const product = ref<MockProduct | null>(null)
+
+async function loadProduct() {
+  if (!slug.value) {
+    product.value = null
+    return
+  }
+  const brand = typeof route.query.brand === 'string' ? route.query.brand : undefined
+  product.value = await fetchCatalogProductBySlug(slug.value, brand)
+}
+
+onMounted(() => {
+  loadProduct()
+})
+
+watch(slug, () => {
+  loadProduct()
+})
+
+watch(
+  () => route.query.brand,
+  () => {
+    loadProduct()
+  }
+)
 
 function goBack() {
   if (window.history.length > 1) {
@@ -127,9 +150,10 @@ function goBack() {
   border-radius: 18px;
   overflow: hidden;
   aspect-ratio: 1 / 1;
-  background-size: cover;
+  background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
+  background-color: #fff;
   box-shadow: 0 10px 22px rgba(0,0,0,.12);
   position: relative;
 }

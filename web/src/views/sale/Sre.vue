@@ -37,7 +37,7 @@
       </el-form-item>
       <el-divider class="fistDivider"></el-divider>
       <ag-grid-vue
-        class="ag-theme-balham"
+        :class="['ag-theme-balham', picVisible ? 'ag-pic-mode' : '']"
         :context="grid.context"
         :defaultColDef="grid.coldef"
         :gridOptions="grid.options"
@@ -144,6 +144,9 @@
         >
           <el-button type="info" @click="save">保存</el-button>
         </template>
+        <el-button type="info" @click="togglePics">{{
+          picVisible ? "隐藏图片" : "图片"
+        }}</el-button>
         <template v-if="form.id != 0">
           <template v-if="$lib.getUserRoot(store.root, 'sre', 'examine')">
             <el-button type="info" @click="examine">{{
@@ -289,6 +292,9 @@ export default {
           onGridReady: () => {
             this.$grid.addGridRow(this.grid.options);
           },
+          getRowHeight: (params) => {
+            return params.context.isPicVisible() ? 60 : 32;
+          },
           onCellEditingStopped: (grid) => {
             grid.context.runHandleGrid();
           },
@@ -301,6 +307,9 @@ export default {
             } else {
               this.handleGrid(false);
             }
+          },
+          isPicVisible: () => {
+            return this.picVisible;
           },
         },
         coldef: {
@@ -346,6 +355,24 @@ export default {
             cellRenderer: "setter",
             hide: false,
             dispose: false,
+          },
+          {
+            headerName: "图片",
+            width: 70,
+            field: "imgs",
+            hide: true,
+            dispose: false,
+            cellRenderer: (params) => {
+              const url = this.getImgUrl(params.data);
+              if (!url) return "";
+              return (
+                '<div style="width:100%;display:flex;align-items:center;justify-content:center;">' +
+                '<img src="' +
+                url +
+                '" style="width:54px;height:54px;object-fit:contain;" />' +
+                "</div>"
+              );
+            },
           },
           {
             headerName: "商品名称",
@@ -526,6 +553,7 @@ export default {
         dialog: false,
         parm: {},
       },
+      picVisible: false,
     };
   },
   computed: {
@@ -539,6 +567,30 @@ export default {
     this.$bus.on("buildSre", this.buildSre);
   },
   methods: {
+    togglePics() {
+      this.picVisible = !this.picVisible;
+      const api = this.grid.options.api;
+      const colApi = this.grid.options.columnApi;
+      if (!api || !colApi) return;
+      colApi.setColumnVisible("imgs", this.picVisible);
+      api.resetRowHeights && api.resetRowHeights();
+      api.sizeColumnsToFit && api.sizeColumnsToFit();
+    },
+    getImgUrl(row) {
+      const imgs = row ? row.imgs : null;
+      let val = "";
+      if (Array.isArray(imgs) && imgs.length > 0) {
+        const first = imgs[0];
+        val = typeof first == "string" ? first : first && first.url ? first.url : "";
+      } else if (imgs && typeof imgs == "object") {
+        val = imgs.url || "";
+      } else if (typeof imgs == "string") {
+        val = imgs;
+      }
+      if (this.$lib.validate("empty", val)) return "";
+      if (/^https?:\/\//.test(val)) return val;
+      return (this.store.base && this.store.base.cdnSite ? this.store.base.cdnSite : "") + val;
+    },
     //初始化
     init() {
       if (this.source == null) {
@@ -837,6 +889,7 @@ export default {
           source: item.hasOwnProperty("source") ? item.source : 0,
           key: goods.id,
           goodsType: goods.type,
+          imgs: goods.imgs,
           unitData: goods.units,
           unitRelation: {
             valence: goods[priceType],

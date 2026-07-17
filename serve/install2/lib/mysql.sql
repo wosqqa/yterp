@@ -416,14 +416,17 @@ CREATE TABLE `is_category` (
   `pid` int(11) NOT NULL COMMENT '所属类别',
   `name` varchar(32) NOT NULL COMMENT '类别名称',
   `sort` int(11) DEFAULT '0' COMMENT '类别排序',
+  `weight` decimal(16,5) NOT NULL DEFAULT '0.00000' COMMENT '重量kg',
+  `volume` decimal(16,5) NOT NULL DEFAULT '0.00000' COMMENT '体积cbm',
+  `factory_price` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '出厂价',
   `data` varchar(256) NOT NULL COMMENT '备注信息',
   PRIMARY KEY (`id`),
   KEY `pid` (`pid`),
   KEY `sort` (`sort`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='商品类别';
 
-INSERT INTO `is_category` (`id`, `pid`, `name`, `sort`, `data`) VALUES
-(0,	-1,	'默认类别',	0,	'隐藏类别');
+INSERT INTO `is_category` (`id`, `pid`, `name`, `sort`, `weight`, `volume`, `factory_price`, `data`) VALUES
+(0,	-1,	'默认类别',	0,	0.00000,	0.00000,	0.00,	'隐藏类别');
 
 DROP TABLE IF EXISTS `is_code`;
 CREATE TABLE `is_code` (

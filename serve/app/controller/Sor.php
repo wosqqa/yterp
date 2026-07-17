@@ -297,7 +297,14 @@ class Sor extends Acl{
                 $class=[
                     'source'=>$source['class']['id'],
                     'customer'=>$source['class']['customer'],
-                    'total'=>0
+                    'total'=>0,
+                    'actual'=>$source['class']['actual'],
+                    'people'=>$source['class']['people'],
+                    'arrival'=>$source['class']['arrival'],
+                    'logistics'=>$source['class']['logistics'],
+                    'file'=>$source['class']['file'],
+                    'data'=>$source['class']['data'],
+                    'more'=>$source['class']['more']
                 ];
                 //INFO数据
                 $info=[];

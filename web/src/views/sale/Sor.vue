@@ -786,6 +786,7 @@ export default {
           number: r.number,
           spec: r.spec,
           type: r.goodsType,
+          data: r.goodsCombo != null ? String(r.goodsCombo) : "",
           unit: unitData.length > 0 ? "-1" : r.unit,
           units: unitData,
           imgs: r.imgs,

@@ -3,7 +3,7 @@
     <HeroBanner />
 
     <section class="controls">
-      <button class="ctlBtn" @click="filterOpen = true">
+      <button class="ctlBtn" @click="openFilterDrawer">
         <span class="ctlIcon sliders" />
         <span>{{ t('filter') }}</span>
       </button>
@@ -36,17 +36,26 @@
       <div class="grid" :class="{ list: viewMode === 'list' }">
         <ProductCard v-for="p in visibleProducts" :key="p.id" :product="p" @add="cart.add(p, 1)" />
       </div>
+
+      <div v-if="products.length || isLoading" class="loadMoreBox">
+        <div ref="loadMoreTrigger" class="loadMoreTrigger" />
+        <p v-if="isLoading" class="loadMoreText">Loading...</p>
+        <button v-else-if="hasMore" class="loadMoreBtn" @click="loadNextPage">Load more</button>
+        <p v-else-if="products.length" class="loadMoreText">No more products</p>
+        <p v-if="loadError" class="loadMoreError">{{ loadError }}</p>
+      </div>
     </section>
 
     <FilterDrawer
       :open="filterOpen"
       :product-types="productTypes"
-      :selected-types="selectedTypes"
-      :in-stock-only="inStockOnly"
-      @close="filterOpen = false"
-      @toggle-type="toggleType"
-      @set-in-stock-only="inStockOnly = $event"
-      @clear="clearFilters"
+      :selected-types="draftSelectedTypes"
+      :in-stock-only="draftInStockOnly"
+      @close="closeFilterDrawer"
+      @toggle-type="toggleDraftType"
+      @set-in-stock-only="setDraftCollectionOnly"
+      @clear="clearDraftFilters"
+      @apply="applyFilters"
     />
 
     <SortSheet :open="sortOpen" :value="sortKey" @close="sortOpen = false" @change="sortKey = $event" />
@@ -54,32 +63,233 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useMockCatalog, type MockProduct, type SortKey } from '../composables/mockCatalog'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import {
+  buildCatalogQueryParams,
+  fetchCatalogCategories,
+  fetchCatalogProducts,
+  type CatalogCategoryOption,
+  type MockProduct,
+  type SortKey
+} from '../composables/mockCatalog'
 import { useCart } from '../composables/cart'
 import { useI18n } from '../composables/i18n'
 
-const { productTypes, products } = useMockCatalog()
 const cart = useCart()
 const { t } = useI18n()
+const route = useRoute()
 
 const filterOpen = ref(false)
 const sortOpen = ref(false)
 
-const inStockOnly = ref(false)
-const selectedTypes = ref<string[]>(['Backpacks'])
+const inStockOnly = ref(true)
+const draftInStockOnly = ref(true)
+const selectedTypes = ref<number[]>([])
+const draftSelectedTypes = ref<number[]>([])
 const sortKey = ref<SortKey>('featured')
 const viewMode = ref<'grid' | 'list'>('grid')
 
-function toggleType(t: string) {
+const products = ref<MockProduct[]>([])
+const productTypes = ref<CatalogCategoryOption[]>([])
+const totalCount = ref(0)
+const currentPage = ref(1)
+const isLoading = ref(false)
+const loadError = ref('')
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+
+let loadMoreObserver: IntersectionObserver | null = null
+
+const hasMore = computed(() => products.value.length < totalCount.value)
+
+function buildPageQuery(page: number) {
+  const brand = typeof route.query.brand === 'string' ? route.query.brand : undefined
+  return {
+    ...buildCatalogQueryParams(brand),
+    category: selectedTypes.value.length ? selectedTypes.value.join(',') : undefined,
+    data: inStockOnly.value ? 'set' : '',
+    page
+  }
+}
+
+async function loadCategoryOptions() {
+  const brand = typeof route.query.brand === 'string' ? route.query.brand : undefined
+  productTypes.value = await fetchCatalogCategories(brand, inStockOnly.value ? 'set' : '')
+}
+
+async function loadCatalogPage(page: number, mode: 'replace' | 'append') {
+  if (isLoading.value) return
+  isLoading.value = true
+  loadError.value = ''
+
+  try {
+    const result = await fetchCatalogProducts(buildPageQuery(page))
+    totalCount.value = result.count
+    currentPage.value = page
+
+    if (mode === 'append') {
+      const existingIds = new Set(products.value.map((product: MockProduct) => product.id))
+      const nextProducts = result.products.filter((product: MockProduct) => !existingIds.has(product.id))
+      products.value = products.value.concat(nextProducts)
+    } else {
+      products.value = result.products
+    }
+  } catch (error) {
+    if (mode === 'replace') {
+      products.value = []
+      totalCount.value = 0
+      currentPage.value = 1
+    }
+    loadError.value = error instanceof Error ? error.message : 'Load failed'
+  } finally {
+    isLoading.value = false
+    nextTick(() => {
+      queueLoadMoreIfNeeded()
+    })
+  }
+}
+
+async function loadCatalog() {
+  currentPage.value = 1
+  totalCount.value = 0
+  await loadCatalogPage(1, 'replace')
+}
+
+async function loadNextPage() {
+  if (!hasMore.value || isLoading.value) return
+  await loadCatalogPage(currentPage.value + 1, 'append')
+}
+
+function queueLoadMoreIfNeeded() {
+  if (typeof window === 'undefined' || !loadMoreTrigger.value || isLoading.value || !hasMore.value) return
+  window.requestAnimationFrame(() => {
+    if (!loadMoreTrigger.value || isLoading.value || !hasMore.value) return
+    const rect = loadMoreTrigger.value.getBoundingClientRect()
+    if (rect.top <= window.innerHeight + 160) {
+      loadNextPage()
+    }
+  })
+}
+
+function setupLoadMoreObserver() {
+  if (typeof window === 'undefined' || !loadMoreTrigger.value) return
+  loadMoreObserver?.disconnect()
+  loadMoreObserver = new IntersectionObserver(
+    entries => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        loadNextPage()
+      }
+    },
+    { rootMargin: '200px 0px' }
+  )
+  loadMoreObserver.observe(loadMoreTrigger.value)
+}
+
+onMounted(() => {
+  loadCategoryOptions()
+  loadCatalog()
+  nextTick(() => {
+    setupLoadMoreObserver()
+  })
+})
+
+onBeforeUnmount(() => {
+  loadMoreObserver?.disconnect()
+})
+
+watch(
+  () => route.query.brand,
+  () => {
+    selectedTypes.value = []
+    draftSelectedTypes.value = []
+    draftInStockOnly.value = inStockOnly.value
+    loadCategoryOptions()
+    loadCatalog()
+  }
+)
+
+watch(loadMoreTrigger, () => {
+  nextTick(() => {
+    setupLoadMoreObserver()
+  })
+})
+
+function arraysEqual(a: number[], b: number[]) {
+  if (a.length !== b.length) return false
+  return a.every((value, index) => value === b[index])
+}
+
+function openFilterDrawer() {
+  draftInStockOnly.value = inStockOnly.value
+  draftSelectedTypes.value = selectedTypes.value.slice()
+  filterOpen.value = true
+}
+
+function closeFilterDrawer() {
+  filterOpen.value = false
+}
+
+function toggleDraftType(typeId: number) {
+  const set = new Set(draftSelectedTypes.value)
+  set.has(typeId) ? set.delete(typeId) : set.add(typeId)
+  draftSelectedTypes.value = Array.from(set)
+}
+
+function setDraftCollectionOnly(value: boolean) {
+  draftInStockOnly.value = value
+}
+
+async function toggleType(typeId: number) {
   const set = new Set(selectedTypes.value)
-  set.has(t) ? set.delete(t) : set.add(t)
+  set.has(typeId) ? set.delete(typeId) : set.add(typeId)
   selectedTypes.value = Array.from(set)
+  draftSelectedTypes.value = selectedTypes.value.slice()
+  await loadCatalog()
+}
+
+async function setCollectionOnly(value: boolean) {
+  if (inStockOnly.value === value) return
+  inStockOnly.value = value
+  draftInStockOnly.value = value
+  selectedTypes.value = []
+  draftSelectedTypes.value = []
+  await loadCategoryOptions()
+  await loadCatalog()
+}
+
+async function applyFilters() {
+  const collectionChanged = draftInStockOnly.value !== inStockOnly.value
+  const typeChanged = !arraysEqual(draftSelectedTypes.value, selectedTypes.value)
+  inStockOnly.value = draftInStockOnly.value
+  selectedTypes.value = draftSelectedTypes.value.slice()
+  filterOpen.value = false
+
+  if (!collectionChanged && !typeChanged) return
+
+  if (collectionChanged) {
+    await loadCategoryOptions()
+    const validCategoryIds = new Set(productTypes.value.map(type => type.id))
+    selectedTypes.value = selectedTypes.value.filter(typeId => validCategoryIds.has(typeId))
+    draftSelectedTypes.value = selectedTypes.value.slice()
+  }
+
+  await loadCatalog()
+}
+
+function clearDraftFilters() {
+  draftInStockOnly.value = false
+  draftSelectedTypes.value = []
 }
 
 function clearFilters() {
+  const needReload = selectedTypes.value.length > 0 || inStockOnly.value
   inStockOnly.value = false
+  if (!needReload) return
   selectedTypes.value = []
+  draftSelectedTypes.value = []
+  draftInStockOnly.value = false
+  loadCategoryOptions()
+  loadCatalog()
 }
 
 function sortProducts(list: MockProduct[], key: SortKey) {
@@ -92,28 +302,26 @@ function sortProducts(list: MockProduct[], key: SortKey) {
 }
 
 const filteredProducts = computed(() => {
-  let out = products.slice()
-  if (selectedTypes.value.length) out = out.filter(p => selectedTypes.value.includes(p.productType))
-  if (inStockOnly.value) out = out.filter(p => p.inStock)
-  return out
+  return products.value.slice()
 })
 
 const visibleProducts = computed(() => sortProducts(filteredProducts.value, sortKey.value))
 
 const activeChips = computed(() => {
   const chips: Array<{ key: string; label: string; remove: () => void }> = []
-  selectedTypes.value.forEach(typeName => {
+  selectedTypes.value.forEach(typeId => {
+    const typeName = productTypes.value.find(type => type.id === typeId)?.label || String(typeId)
     chips.push({
-      key: `type:${typeName}`,
+      key: `type:${typeId}`,
       label: `${t('productType')}: ${typeName}`,
-      remove: () => toggleType(typeName)
+      remove: () => toggleType(typeId)
     })
   })
   if (inStockOnly.value) {
     chips.push({
       key: 'stock',
       label: t('inStockOnly'),
-      remove: () => (inStockOnly.value = false)
+      remove: () => setCollectionOnly(false)
     })
   }
   return chips
@@ -284,6 +492,36 @@ const activeChips = computed(() => {
 }
 .grid.list{
   grid-template-columns: 1fr;
+}
+.loadMoreBox{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 0 8px;
+}
+.loadMoreTrigger{
+  width: 100%;
+  height: 1px;
+}
+.loadMoreBtn{
+  border: 1px solid rgba(17,17,17,.12);
+  background: #fff;
+  color: #111827;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.loadMoreText{
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.loadMoreError{
+  margin: 0;
+  color: #b91c1c;
+  font-size: 13px;
 }
 
 @media (min-width: 900px){

@@ -5,6 +5,52 @@ use app\model\Summary;
 use think\facade\{Db,Filesystem};
 use think\exception\ValidateException;
 class Wrf extends Acl{
+    protected function decodeSummaryGroup($row){
+        $def=['exist'=>[0,0,0,0],'balance'=>[0,0,0,0]];
+        if(empty($row)){
+            return $def;
+        }
+        $exist=json_decode($row['exist'],true);
+        $balance=json_decode($row['balance'],true);
+        return [
+            'exist'=>is_array($exist)?$exist:$def['exist'],
+            'balance'=>is_array($balance)?$balance:$def['balance']
+        ];
+    }
+    protected function buildRoomGather($warehouseIds,$goodsIds){
+        $gather=[];
+        if(empty($warehouseIds) || empty($goodsIds)){
+            return $gather;
+        }
+        $room=Db::name('room')->where([['warehouse','in',$warehouseIds],['goods','in',$goodsIds]])->select()->toArray();
+        foreach ($room as $roomVo) {
+            $key=md5_16($roomVo['warehouse'].'&'.$roomVo['goods']);
+            $gather[$key]=math()->chain($gather[$key]??0)->add($roomVo['nums'])->done();
+        }
+        return $gather;
+    }
+    protected function getRoomQty($gather,$warehouseId,$goodsId){
+        $key=md5_16($warehouseId.'&'.$goodsId);
+        return isset($gather[$key])?floatval($gather[$key]):0;
+    }
+    protected function buildWbsCell($goodsData,$qty,$bct){
+        if(empty($qty) && empty($bct)){
+            return ['uct'=>'','uns'=>'','bct'=>'','rawUns'=>0];
+        }
+        $uct=empty($qty)?0:math()->chain($bct)->div($qty)->round(2)->done();
+        return [
+            'uct'=>$uct,
+            'uns'=>$goodsData['unit']==-1?unitSwitch($qty,$goodsData['units']):$qty,
+            'bct'=>$bct,
+            'rawUns'=>$qty
+        ];
+    }
+    protected function isCurrentStockDate($date){
+        if(empty($date)){
+            return true;
+        }
+        return strtotime($date) >= strtotime(date('Y-m-d'));
+    }
     //商品库存余额表
     public function wbs(){
         $input=input('post.');
@@ -29,6 +75,9 @@ class Wrf extends Acl{
             }
             $count=Summary::where($sql)->group(['goods'])->count();
             $info=Summary::with(['goodsData'])->where($sql)->group(['goods'])->page($input['page'],$input['limit'])->order(['goods'])->select()->toArray();
+            $warehouseIds=array_column($column,'id');
+            $isCurrent=$this->isCurrentStockDate($input['time']??'');
+            $roomGather=$isCurrent?$this->buildRoomGather($warehouseIds,array_column($info,'goods')):[];
             foreach ($info as $key=>$vo) {
                 //查询条件
                 $where=fastSql($input,[['time','endTime']]);
@@ -36,35 +85,25 @@ class Wrf extends Acl{
                 //单位数据
                 $info[$key]['unit']=$vo['goodsData']['unit']==-1?'多单位':$vo['goodsData']['unit'];
                 //分仓数据
-                $info[$key]['uns']=0;
+                $totalQty=0;
+                $totalBct=0;
                 foreach ($column as $v) {
                     $wb=Db::name('summary')->where(array_merge($where,[['warehouse','=',$v['id']]]))->order(['id'=>'DESC'])->find();
-                    
-                    $wb=empty($wb)?['exist'=>[0,0,0,0],'balance'=>[0,0,0,0]]:['exist'=>json_decode($wb['exist']),'balance'=>json_decode($wb['balance'])];
-                    if(empty($wb['exist'][1]) && empty($wb['balance'][1])){
-                        $info[$key]['wb_'.$v['id']]=['uct'=>'','uns'=>'','bct'=>''];
+                    $wb=$this->decodeSummaryGroup($wb);
+                    if($isCurrent){
+                        $qty=$this->getRoomQty($roomGather,$v['id'],$vo['goods']);
+                        $uct=empty($wb['exist'][1])?0:math()->chain($wb['balance'][1])->div($wb['exist'][1])->round(2)->done();
+                        $bct=math()->chain($uct)->mul($qty)->round(2)->done();
                     }else{
-                        $info[$key]['wb_'.$v['id']]=[
-                            'uct'=>empty($wb['exist'][1])?0:math()->chain($wb['balance'][1])->div($wb['exist'][1])->round(2)->done(),
-                            'uns'=>$vo['goodsData']['unit']==-1?unitSwitch($wb['exist'][1],$vo['goodsData']['units']):$wb['exist'][1],
-                            'bct'=>$wb['balance'][1] 
-                        ];
+                        $qty=floatval($wb['exist'][1]);
+                        $bct=floatval($wb['balance'][1]);
                     }
-                    if(!empty($info[$key]['wb_'.$v['id']]['uns']) && $vo['goodsData']['unit'] != -1){
-                        $info[$key]['uns']+=$info[$key]['wb_'.$v['id']]['uns'];
-                    }elseif(!empty($info[$key]['wb_'.$v['id']]['uns']) && $vo['goodsData']['unit'] == -1){
-                        $info[$key]['uns']+-$wb['exist'][1];
-                    }
-                    
+                    $info[$key]['wb_'.$v['id']]=$this->buildWbsCell($vo['goodsData'],$qty,$bct);
+                    $totalQty=math()->chain($totalQty)->add($qty)->done();
+                    $totalBct=math()->chain($totalBct)->add($bct)->done();
                 }
                 //汇总数据
-                $balance=Db::name('summary')->where($where)->order(['id'=>'DESC'])->find();
-                $balance=['exist'=>json_decode($balance['exist']),'balance'=>json_decode($balance['balance'])];
-                $info[$key]['balance']=[];
-                $info[$key]['balance']['uct']=empty($balance['exist'][0])?0:math()->chain($balance['balance'][0])->div($balance['exist'][0])->round(2)->done();
-                $info[$key]['balance']['uns']=$vo['goodsData']['unit']==-1?unitSwitch($info[$key]['uns'],$vo['goodsData']['units']):$info[$key]['uns'];
-                $info[$key]['balance']['bct']=math()->chain($info[$key]['balance']['uct'])->mul($info[$key]['balance']['uns'])->round(2)->done();
-                
+                $info[$key]['balance']=$this->buildWbsCell($vo['goodsData'],$totalQty,$totalBct);
             }
            
             $result=[
@@ -103,6 +142,9 @@ class Wrf extends Acl{
             }
             $count=Summary::where($sql)->group(['goods'])->count();
             $info=Summary::with(['goodsData'])->where($sql)->group(['goods'])->order(['goods'])->select()->toArray();
+            $warehouseIds=array_column($column,'id');
+            $isCurrent=$this->isCurrentStockDate($input['time']??'');
+            $roomGather=$isCurrent?$this->buildRoomGather($warehouseIds,array_column($info,'goods')):[];
             foreach ($info as $key=>$vo) {
                 //查询条件
                 $where=fastSql($input,[['time','endTime']]);
@@ -110,27 +152,25 @@ class Wrf extends Acl{
                 //单位数据
                 $info[$key]['unit']=$vo['goodsData']['unit']==-1?'多单位':$vo['goodsData']['unit'];
                 //分仓数据
+                $totalQty=0;
+                $totalBct=0;
                 foreach ($column as $v) {
                     $wb=Db::name('summary')->where(array_merge($where,[['warehouse','=',$v['id']]]))->order(['id'=>'DESC'])->find();
-                    $wb=empty($wb)?['exist'=>[0,0,0,0],'balance'=>[0,0,0,0]]:['exist'=>json_decode($wb['exist']),'balance'=>json_decode($wb['balance'])];
-                    if(empty($wb['exist'][1]) && empty($wb['balance'][1])){
-                        $info[$key]['wb_'.$v['id']]=['uct'=>'','uns'=>'','bct'=>''];
+                    $wb=$this->decodeSummaryGroup($wb);
+                    if($isCurrent){
+                        $qty=$this->getRoomQty($roomGather,$v['id'],$vo['goods']);
+                        $uct=empty($wb['exist'][1])?0:math()->chain($wb['balance'][1])->div($wb['exist'][1])->round(2)->done();
+                        $bct=math()->chain($uct)->mul($qty)->round(2)->done();
                     }else{
-                        $info[$key]['wb_'.$v['id']]=[
-                            'uct'=>empty($wb['exist'][1])?0:math()->chain($wb['balance'][1])->div($wb['exist'][1])->round(2)->done(),
-                            'uns'=>$vo['goodsData']['unit']==-1?unitSwitch($wb['exist'][1],$vo['goodsData']['units']):$wb['exist'][1],
-                            'bct'=>$wb['balance'][1] 
-                        ];
+                        $qty=floatval($wb['exist'][1]);
+                        $bct=floatval($wb['balance'][1]);
                     }
+                    $info[$key]['wb_'.$v['id']]=$this->buildWbsCell($vo['goodsData'],$qty,$bct);
+                    $totalQty=math()->chain($totalQty)->add($qty)->done();
+                    $totalBct=math()->chain($totalBct)->add($bct)->done();
                 }
                 //汇总数据
-                $balance=Db::name('summary')->where($where)->order(['id'=>'DESC'])->find();
-                $balance=['exist'=>json_decode($balance['exist']),'balance'=>json_decode($balance['balance'])];
-                $info[$key]['balance']=[
-                    'uct'=>empty($balance['exist'][0])?0:math()->chain($balance['balance'][0])->div($balance['exist'][0])->round(2)->done(),
-                    'uns'=>$vo['goodsData']['unit']==-1?unitSwitch($balance['exist'][0],$vo['goodsData']['units']):$balance['exist'][0],
-                    'bct'=>$balance['balance'][0]
-                ];
+                $info[$key]['balance']=$this->buildWbsCell($vo['goodsData'],$totalQty,$totalBct);
             }
             $source=$info;
             $columns=[];

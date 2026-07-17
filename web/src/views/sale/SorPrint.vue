@@ -5,34 +5,36 @@
       <el-button size="mini" @click="toggleUnitPrice">{{ unitPriceHidden ? "显示单价" : "隐藏单价" }}</el-button>
       <el-button size="mini" @click="toggleHideWarehouse2">{{ hideWarehouse2 ? "显示仓库" : "隐藏仓库" }}</el-button>
       <el-button size="mini" @click="toggleRowDisplay">{{ rowDisplay === "single" ? "合并显示" : "单列显示" }}</el-button>
+      <el-button size="mini" @click="toggleMetrics">{{ showMetrics ? "隐藏重量" : "显示重量" }}</el-button>
     </div>
-    <div class="switchBar">
-      <el-button-group>
-        <el-button size="mini" :type="groupBy === 'category' ? 'primary' : 'info'" @click="setGroupBy('category')"
-          >产品分类</el-button
-        >
-        <el-button size="mini" :type="groupBy === 'warehouse' ? 'primary' : 'info'" @click="setGroupBy('warehouse')"
-          >仓库分类</el-button
-        >
-        <el-button size="mini" :type="groupBy === 'pack' ? 'primary' : 'info'" @click="setGroupBy('pack')"
-          >装箱分类</el-button
-        >
-        <el-button size="mini" :type="groupBy === 'combo' ? 'primary' : 'info'" @click="setGroupBy('combo')"
-          >组合分类</el-button
-        >
-      </el-button-group>
-      <el-button-group>
-        <el-button size="mini" :type="headerMode === 'invoice' ? 'primary' : 'info'" @click="enterInvoice"
-          >商业发票</el-button
-        >
-      </el-button-group>
-      <el-button-group>
-        <el-button size="mini" type="success" @click="exportXlsx">导出XLSX</el-button>
-        <el-button size="mini" type="primary" @click="openPdfPreview">PDF预览</el-button>
-      </el-button-group>
-    </div>
-    <div class="paper" :class="{ comboMode: groupBy === 'combo', invoiceMode: headerMode === 'invoice' }">
-      <div v-if="headerMode !== 'invoice'" class="header">
+    <div class="previewWorkbench" :class="{ metricsMode: showMetrics }">
+      <div class="switchBar">
+        <el-button-group>
+          <el-button size="mini" :type="groupBy === 'category' ? 'primary' : 'info'" @click="setGroupBy('category')"
+            >产品分类</el-button
+          >
+          <el-button size="mini" :type="groupBy === 'warehouse' ? 'primary' : 'info'" @click="setGroupBy('warehouse')"
+            >仓库分类</el-button
+          >
+          <el-button size="mini" :type="groupBy === 'pack' ? 'primary' : 'info'" @click="setGroupBy('pack')"
+            >装箱分类</el-button
+          >
+          <el-button size="mini" :type="groupBy === 'combo' ? 'primary' : 'info'" @click="setGroupBy('combo')"
+            >组合分类</el-button
+          >
+        </el-button-group>
+        <el-button-group>
+          <el-button size="mini" :type="headerMode === 'invoice' ? 'primary' : 'info'" @click="enterInvoice"
+            >商业发票</el-button
+          >
+        </el-button-group>
+        <el-button-group>
+          <el-button size="mini" type="success" @click="exportXlsx">导出XLSX</el-button>
+          <el-button size="mini" type="primary" @click="openPdfPreview">PDF预览</el-button>
+        </el-button-group>
+      </div>
+      <div class="paper" :class="{ comboMode: groupBy === 'combo', invoiceMode: headerMode === 'invoice', metricsMode: showMetrics }">
+          <div v-if="headerMode !== 'invoice'" class="header">
         <div class="headerLeft">
           <div class="brandRow">
             <div class="brand">Kim Bags</div>
@@ -61,7 +63,7 @@
         </div>
       </div>
 
-      <div v-if="headerMode === 'invoice'" class="invoiceHeader">
+          <div v-if="headerMode === 'invoice'" class="invoiceHeader">
         <div class="invoiceGrid">
           <div class="invoiceCell invoiceSellerCell">
             <div class="invoiceLabel">Seller</div>
@@ -113,7 +115,7 @@
         </div>
       </div>
 
-      <div v-if="headerMode !== 'invoice'" class="meta">
+          <div v-if="headerMode !== 'invoice'" class="meta">
         <div class="metaRow">
           <div class="metaCol">
             CUSTOMER：<span class="metaVal">{{ customerName }}</span>
@@ -140,7 +142,7 @@
         </div>
       </div>
 
-      <div class="table">
+          <div class="table">
         <div class="tr head">
           <div class="td no">NO.</div>
           <div class="td desc">
@@ -169,6 +171,16 @@
             <div>USD Price</div>
             <div class="en red">1USD={{ exchangeRate }}RMB</div>
           </div>
+          <template v-if="showMetrics">
+            <div class="td metric">
+              <div>重量</div>
+              <div class="en">KG</div>
+            </div>
+            <div class="td metric">
+              <div>体积</div>
+              <div class="en">CBM</div>
+            </div>
+          </template>
         </div>
 
         <div class="tr" v-for="row in rows" :key="row.key">
@@ -193,6 +205,10 @@
           </div>
           <div class="td amount big">￥{{ row.amount }}</div>
           <div class="td usd big">${{ row.usd }}</div>
+          <template v-if="showMetrics">
+            <div class="td metric big">{{ row.weight }}</div>
+            <div class="td metric big">{{ row.volume }}</div>
+          </template>
         </div>
 
         <div class="tr foot">
@@ -211,10 +227,14 @@
           </div>
           <div class="td amount">￥{{ totalRmb }}</div>
           <div class="td usd">${{ totalUsd }}</div>
+          <template v-if="showMetrics">
+            <div class="td metric">{{ totalWeight }}</div>
+            <div class="td metric">{{ totalVolume }}</div>
+          </template>
         </div>
       </div>
 
-      <div v-if="headerMode === 'invoice'" class="invoiceFooter">
+          <div v-if="headerMode === 'invoice'" class="invoiceFooter">
         <div class="invoiceFooterBox">
           <div class="invoiceFooterTable">
             <div class="invoiceFooterCell invoiceFooterLabel">Total:</div>
@@ -245,9 +265,10 @@
         </div>
       </div>
 
-      <div v-if="headerMode !== 'invoice'" class="summary">
+          <div v-if="headerMode !== 'invoice'" class="summary">
         <div class="sumLeft">
           <div class="sumTitle">NOTE：</div>
+          <div class="sumNote">{{ noteText }}</div>
         </div>
         <div class="sumRight">
           <div class="sumRow">
@@ -272,13 +293,46 @@
           </div>
         </div>
       </div>
+      </div>
+    </div>
+    <div v-if="showCategorySummary" class="summaryFloat" :class="{ metricsMode: showMetrics }">
+      <div class="summaryFilterBar">
+        <span class="summaryFilterLabel">仓库</span>
+        <el-select
+          size="mini"
+          clearable
+          :value="summaryWarehouse"
+          placeholder="全部仓库"
+          @change="summaryWarehouse = $event"
+        >
+          <el-option
+            v-for="item in summaryWarehouseOptions"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          ></el-option>
+        </el-select>
+      </div>
+      <CategorySummaryPanel
+        class="summaryAside"
+        :rows="summaryRows"
+        :category-path="'goodsData.category'"
+        :qty-path="'nums'"
+        :default-price-path="'goodsData.buy'"
+        :table-height="null"
+      ></CategorySummaryPanel>
     </div>
   </div>
 </template>
 
 <script>
+import CategorySummaryPanel from "@/components/lib/CategorySummaryPanel";
+
 export default {
   name: "SorPrint",
+  components: {
+    CategorySummaryPanel
+  },
   props: {
     action: {
       type: String,
@@ -286,6 +340,10 @@ export default {
     },
     source: {
       default: null
+    },
+    summaryEnabled: {
+      type: Boolean,
+      default: false
     }
   },
   data() {
@@ -303,6 +361,7 @@ export default {
       imgQtyHidden: false,
       unitPriceHidden: false,
       hideWarehouse2: false,
+      showMetrics: false,
       rowDisplay: "merge",
       groupBy: "category",
       customerInfo: {
@@ -316,6 +375,7 @@ export default {
         arrival: "",
         data: ""
       },
+      summaryWarehouse: "",
       detailRows: [],
       totalPay: "0.00"
     };
@@ -331,6 +391,30 @@ export default {
   computed: {
     store() {
       return this.$store.state;
+    },
+    showCategorySummary() {
+      return this.summaryEnabled && this.headerMode !== "invoice" && String(this.action || "").trim() === "sell/get";
+    },
+    summaryWarehouseOptions() {
+      const map = {};
+      const list = [];
+      for (const item of this.detailRows || []) {
+        const idRaw = item && item.warehouse != null ? item.warehouse : "";
+        const id = String(idRaw).trim();
+        if (!id || map[id]) continue;
+        const label =
+          this.$lib.objectSeek(item, "warehouseData.name") ||
+          this.getWarehouseName(idRaw) ||
+          "未分配仓库";
+        map[id] = true;
+        list.push({ value: id, label });
+      }
+      return list;
+    },
+    summaryRows() {
+      const selected = String(this.summaryWarehouse || "").trim();
+      if (!selected) return this.detailRows;
+      return (this.detailRows || []).filter(item => String(item && item.warehouse != null ? item.warehouse : "").trim() === selected);
     },
     customerName() {
       return this.customerInfo.name || "";
@@ -374,15 +458,20 @@ export default {
               pics: [],
               ttQty: 0,
               amountVal: 0,
-              unitPriceVal: null
+              unitPriceVal: null,
+              weightVal: 0,
+              volumeVal: 0
             };
             order.push(key);
           }
 
           const qty = Number(item && item.nums) || 0;
           const amt = item && item.tpt != null && item.tpt !== "" ? Number(item.tpt) : Number(item && item.total) || 0;
+          const itemMetrics = this.getItemMetrics(item);
           map[key].ttQty = this.$calc.chain(map[key].ttQty).add(qty).done();
           map[key].amountVal = this.$calc.chain(map[key].amountVal).add(amt).done();
+          map[key].weightVal = this.$calc.chain(map[key].weightVal).add(itemMetrics.weightVal).done();
+          map[key].volumeVal = this.$calc.chain(map[key].volumeVal).add(itemMetrics.volumeVal).done();
           map[key].unitPriceVal == null && (map[key].unitPriceVal = Number(item && item.price) || 0);
 
           const picKey = item && item.id != null ? String(item.id) : this.$lib.getUniqid();
@@ -408,6 +497,10 @@ export default {
             uPriceText: "",
             amountVal: row.amountVal,
             usdVal,
+            weightVal: row.weightVal,
+            volumeVal: row.volumeVal,
+            weight: this.formatMeasure(row.weightVal),
+            volume: this.formatMeasure(row.volumeVal),
             amount: this.formatMoney(row.amountVal, 2),
             usd: this.formatMoney(usdVal, 2)
           };
@@ -456,6 +549,7 @@ export default {
           const qty = Number(item && item.nums) || 0;
           const amt = item && item.tpt != null && item.tpt !== "" ? Number(item.tpt) : Number(item && item.total) || 0;
           const usdVal = this.exchangeRate ? amt / this.exchangeRate : 0;
+          const itemMetrics = this.getItemMetrics(item);
           const wid = item && item.warehouse != null ? String(item.warehouse) : "";
           if (this.hideWarehouse2 && wid === "2") continue;
           const desc = goods.data || goods.name || goods.number || (categoryInfo && categoryInfo.label) || "";
@@ -479,6 +573,10 @@ export default {
             uPriceText: "",
             amountVal: amt,
             usdVal,
+            weightVal: itemMetrics.weightVal,
+            volumeVal: itemMetrics.volumeVal,
+            weight: this.formatMeasure(itemMetrics.weightVal),
+            volume: this.formatMeasure(itemMetrics.volumeVal),
             amount: this.formatMoney(amt, 2),
             usd: this.formatMoney(usdVal, 2)
           });
@@ -543,14 +641,19 @@ export default {
             priceByPicKey: {},
             ttQty: 0,
             amountVal: 0,
-            unitPriceVal: null
+            unitPriceVal: null,
+            weightVal: 0,
+            volumeVal: 0
           };
           order.push(key);
         }
         const qty = Number(item.nums) || 0;
         const amt = item.tpt != null && item.tpt !== "" ? Number(item.tpt) : Number(item.total) || 0;
+        const itemMetrics = this.getItemMetrics(item);
         map[key].ttQty = this.$calc.chain(map[key].ttQty).add(qty).done();
         map[key].amountVal = this.$calc.chain(map[key].amountVal).add(amt).done();
+        map[key].weightVal = this.$calc.chain(map[key].weightVal).add(itemMetrics.weightVal).done();
+        map[key].volumeVal = this.$calc.chain(map[key].volumeVal).add(itemMetrics.volumeVal).done();
         if (this.groupBy === "combo") {
           map[key].unitPriceVal = map[key].amountVal;
         } else {
@@ -595,6 +698,10 @@ export default {
           uPriceText,
           amountVal: row.amountVal,
           usdVal,
+          weightVal: row.weightVal,
+          volumeVal: row.volumeVal,
+          weight: this.formatMeasure(row.weightVal),
+          volume: this.formatMeasure(row.volumeVal),
           amount: this.formatMoney(row.amountVal, 2),
           usd: this.formatMoney(usdVal, 2)
         };
@@ -724,6 +831,25 @@ export default {
       const usd = this.exchangeRate ? this.totalRmbVal / this.exchangeRate : 0;
       return this.formatMoney(usd, 2);
     },
+    totalWeightVal() {
+      let total = this.$calc.chain(0);
+      for (const row of this.rows) total.add(Number(row && row.weightVal) || 0);
+      return total.done();
+    },
+    totalWeight() {
+      return this.formatMeasure(this.totalWeightVal);
+    },
+    totalVolumeVal() {
+      let total = this.$calc.chain(0);
+      for (const row of this.rows) total.add(Number(row && row.volumeVal) || 0);
+      return total.done();
+    },
+    totalVolume() {
+      return this.formatMeasure(this.totalVolumeVal);
+    },
+    noteText() {
+      return this.classData && this.classData.data != null ? String(this.classData.data).trim() : "";
+    },
     freightVal() {
       const n = Number(String(this.freightManual).replace(/,/g, ""));
       return Number.isFinite(n) ? n : 0;
@@ -754,6 +880,9 @@ export default {
   methods: {
     toggleRowDisplay() {
       this.rowDisplay = this.rowDisplay === "single" ? "merge" : "single";
+    },
+    toggleMetrics() {
+      this.showMetrics = !this.showMetrics;
     },
     toggleHideWarehouse2() {
       this.hideWarehouse2 = !this.hideWarehouse2;
@@ -863,7 +992,7 @@ export default {
         "NAME OF OUR AUTHORISED BENEFICIARY AND BANK AS BELOW:",
         "Beneficiary name: Shaodong XiYue Luggage company",
         "Beneficiary bank: DBS Bank (Hong Kong) Limited",
-        "Beneficiary account number: 7996000652695",
+        "Beneficiary account number: 79969000652695",
         "Beneficiary bank address: 11th Floor, The Center, 99 Queen's Road Central, Central, Hong Kong",
         "Beneficiary bank swift code: DHBKKHH"
       ].join("\n");
@@ -1038,6 +1167,8 @@ export default {
           uPriceText: r && r.uPriceText != null ? String(r.uPriceText) : "",
           amount: r && r.amount != null ? String(r.amount) : "",
           usd: r && r.usd != null ? String(r.usd) : "",
+          weight: r && r.weightVal != null ? Number(r.weightVal) : 0,
+          volume: r && r.volumeVal != null ? Number(r.volumeVal) : 0,
           pics
         };
       });
@@ -1060,6 +1191,9 @@ export default {
             number: this.classData.number || "",
             freight: this.freightVal,
             deposit: this.depositVal,
+            totalWeight: this.totalWeightVal,
+            totalVolume: this.totalVolumeVal,
+            noteText: this.noteText,
             totalQty: this.totalQty,
             totalRmb: this.totalRmbVal,
             totalUsd: this.exchangeRate ? this.totalRmbVal / this.exchangeRate : 0,
@@ -1107,10 +1241,10 @@ export default {
       if (!m || !m.isValid || !m.isValid()) return "";
       return m.add(days, "days").format("YYYY-MM-DD");
     },
-    ensureStoreLoaded() {
+    ensureStoreLoaded(force = false) {
       const hasCategory = Array.isArray(this.store.category) && this.store.category.length > 0;
       const hasWarehouse = Array.isArray(this.store.warehouse) && this.store.warehouse.length > 0;
-      if (hasCategory && hasWarehouse) return Promise.resolve(true);
+      if (!force && hasCategory && hasWarehouse) return Promise.resolve(true);
       return this.$axios.post("service/store").then(res => {
         if (res && res.state === "success") {
           res.info && res.info.category && this.$store.commit("upState", { key: "category", val: res.info.category });
@@ -1120,6 +1254,12 @@ export default {
         }
         return true;
       });
+    },
+    getWarehouseName(id) {
+      const target = String(id == null ? "" : id).trim();
+      if (!target) return "";
+      const hit = (this.store.warehouse || []).find(item => String(item && item.id != null ? item.id : "").trim() === target);
+      return hit && hit.name ? String(hit.name) : "";
     },
     parseContacts(val) {
       if (!val) return [];
@@ -1179,6 +1319,44 @@ export default {
       };
       return pickRaw(item && item.category) || pickRaw(goods && goods.category) || { key: "-1", label: "未分类" };
     },
+    getCategoryNodeById(id) {
+      const target = Number(id);
+      if (!Number.isFinite(target)) return null;
+      const walk = list => {
+        for (const node of list || []) {
+          if (Number(node && node.id) === target) return node;
+          const sub = node && (node.sub || node.children);
+          if (sub && sub.length) {
+            const hit = walk(sub);
+            if (hit) return hit;
+          }
+        }
+        return null;
+      };
+      return walk(this.store.category || []);
+    },
+    getCategoryMetrics(item) {
+      const goods = this.$lib.objectSeek(item, "goodsData") || {};
+      const categoryData =
+        (item && item.categoryData) ||
+        (goods && goods.categoryData) ||
+        this.getCategoryNodeById((item && item.category) || (goods && goods.category)) ||
+        null;
+      const weight = Number(categoryData && categoryData.weight);
+      const volume = Number(categoryData && categoryData.volume);
+      return {
+        weight: Number.isFinite(weight) ? weight : 0,
+        volume: Number.isFinite(volume) ? volume : 0
+      };
+    },
+    getItemMetrics(item) {
+      const metrics = this.getCategoryMetrics(item);
+      const qty = Number(item && item.nums) || 0;
+      return {
+        weightVal: this.$calc.chain(qty).multiply(metrics.weight).done(),
+        volumeVal: this.$calc.chain(qty).multiply(metrics.volume).done()
+      };
+    },
     freightManualBlur() {
       const n = Number(String(this.freightManual).replace(/,/g, ""));
       this.freightManual = Number.isFinite(n) ? n : 30;
@@ -1207,7 +1385,7 @@ export default {
             null;
           const customerData = cls.customerData || null;
           Promise.resolve()
-            .then(() => this.ensureStoreLoaded())
+            .then(() => this.ensureStoreLoaded(true))
             .then(() => {
               if (customerData) {
                 this.setCustomerInfoFromCustomerData(customerData);
@@ -1274,6 +1452,10 @@ export default {
       const parts = fixed.split(".");
       parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
       return parts.join(".");
+    },
+    formatMeasure(num) {
+      const n = Number(num);
+      return Number.isFinite(n) ? n.toFixed(3) : "0.000";
     }
   }
 };
@@ -1295,20 +1477,60 @@ export default {
   height: 100%;
   overflow: auto;
 }
-.switchBar {
+.previewWorkbench {
   width: 760px;
-  margin: 0 auto 10px auto;
+  margin: 0 auto;
+}
+.previewWorkbench.metricsMode {
+  width: 940px;
+}
+.switchBar {
+  width: 100%;
+  margin: 0 0 10px 0;
   display: flex;
   justify-content: space-between;
 }
 .paper {
   width: 760px;
-  margin: 0 auto;
   background: #fff;
   border: 1px solid #dcdfe6;
+  flex: 0 0 auto;
+}
+.paper.metricsMode {
+  width: 940px;
 }
 .paper.invoiceMode {
   border-color: #333;
+}
+.summaryFloat {
+  position: fixed;
+  top: 52px;
+  left: calc(50% - 860px);
+  z-index: 40;
+  width: 420px;
+}
+.summaryFloat.metricsMode {
+  left: calc(50% - 950px);
+}
+.summaryFilterBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid #dcdfe6;
+  background: #fff;
+}
+.summaryFilterLabel {
+  font-size: 12px;
+  color: #606266;
+  flex: 0 0 auto;
+}
+.summaryFilterBar .el-select {
+  flex: 1;
+}
+.summaryAside {
+  max-height: none;
 }
 .comboWrap {
   padding: 12px 12px 18px 12px;
@@ -1346,9 +1568,16 @@ export default {
   .switchBar {
     display: none !important;
   }
+  .summaryFloat {
+    display: none !important;
+  }
   .sorPrint {
     padding: 0 !important;
     background: #fff !important;
+  }
+  .previewWorkbench,
+  .previewWorkbench.metricsMode {
+    width: auto !important;
   }
   .paper {
     border: 0 !important;
@@ -1678,6 +1907,9 @@ export default {
 .usd {
   width: 90px;
 }
+.metric {
+  width: 90px;
+}
 .big {
   font-size: 14px;
   font-weight: 600;
@@ -1772,6 +2004,15 @@ export default {
   font-size: 12px;
   font-weight: 700;
   color: #d40000;
+}
+.sumNote {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #303133;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 36px;
 }
 .sumRight {
   width: 270px;

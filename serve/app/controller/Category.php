@@ -5,6 +5,16 @@ use app\model\Category as Categorys;
 use think\facade\Db;
 use think\exception\ValidateException;
 class Category extends Acl{
+    protected function normalizeDecimal($value,$fieldName,$digits=5){
+        $text=trim(strval($value));
+        $text===''&&$text='0';
+        if(!preg_match('/^\d+(\.\d+)?$/',$text)){
+            throw new ValidateException($fieldName.'格式不正确!');
+        }
+        $digits=intval($digits);
+        $digits<0&&$digits=0;
+        return number_format(round((float)$text,$digits),$digits,'.','');
+    }
     //列表
     public function record(){
         $tree=new \org\Tree();
@@ -17,6 +27,9 @@ class Category extends Acl{
         if(isset($input['id'])){
             //验证数据
             try {
+                $input['weight']=$this->normalizeDecimal(isset($input['weight'])?$input['weight']:'0','重量');
+                $input['volume']=$this->normalizeDecimal(isset($input['volume'])?$input['volume']:'0','体积');
+                $input['factory_price']=$this->normalizeDecimal(isset($input['factory_price'])?$input['factory_price']:'0','出厂价',2);
                 if(empty($input['id'])){
                     $this->validate($input,'app\validate\Category');
                 }else{

@@ -70,7 +70,6 @@ import { useRoute } from 'vue-router'
 import { useCart } from '../composables/cart'
 import { useI18n } from '../composables/i18n'
 import { useMoney } from '../composables/money'
-import { useMockCatalog, type MockProduct } from '../composables/mockCatalog'
 import { useUi } from '../composables/ui'
 
 const { cartOpen, closeCart } = useUi()
@@ -80,12 +79,18 @@ const subtotalCny = cart.subtotalCny
 const submitted = ref('')
 const { t } = useI18n()
 const money = useMoney()
-const { products } = useMockCatalog()
 const route = useRoute()
 
-const productById = computed<Record<string, MockProduct>>(() => {
-  const map: Record<string, MockProduct> = {}
-  for (const p of products) map[p.id] = p
+const productById = computed<Record<string, { image: { bg: string; label: string } }>>(() => {
+  const map: Record<string, { image: { bg: string; label: string } }> = {}
+  for (const line of lines.value) {
+    map[line.productId] = {
+      image: {
+        bg: 'linear-gradient(135deg,#111827,#9ca3af)',
+        label: line.title.slice(0, 12).toUpperCase()
+      }
+    }
+  }
   return map
 })
 

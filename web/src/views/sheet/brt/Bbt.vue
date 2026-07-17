@@ -95,6 +95,7 @@
 					sizes: [30, 60, 90, 150, 300],
 					count: 5,
 					status:[
+						{text:'单据总金额',type:'sum',key:'total'},
 						{text:'应付款总余额',type:'sum',key:'balance'}
 					]
 				}

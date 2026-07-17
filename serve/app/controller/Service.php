@@ -84,12 +84,53 @@ class Service extends Acl {
             $dataText = existFull($input,['data']) ? trim(strval($input['data'])) : '';
             $setOrderMode = $dataText !== '' && preg_match('/^set/i', $dataText);
             $sort = existFull($input,['sort']) ? trim(strval($input['sort'])) : '';
+            $numbersInput = null;
+            $numbersFromMate = false;
+            if (existFull($input,['numbers'])) {
+                $numbersInput = $input['numbers'];
+            } elseif (existFull($input,['mate'])) {
+                $mateText = trim(strval($input['mate']));
+                if ($mateText !== '' && preg_match('/[,，]/u', $mateText)) {
+                    $numbersInput = $mateText;
+                    $numbersFromMate = true;
+                }
+            }
+            $numbers = [];
+            if ($numbersInput !== null) {
+                if (is_string($numbersInput)) {
+                    $text = trim($numbersInput);
+                    if ($text !== '' && ($text[0] == '[' || $text[0] == '{')) {
+                        $decoded = json_decode($text, true);
+                        if (is_array($decoded)) $numbersInput = $decoded;
+                    }
+                }
+                $parts = [];
+                if (is_array($numbersInput)) {
+                    $parts = $numbersInput;
+                } else {
+                    $parts = preg_split('/[\s,，]+/u', strval($numbersInput));
+                }
+                $seen = [];
+                foreach ($parts as $v) {
+                    $t = trim(strval($v));
+                    if ($t === '') continue;
+                    $k = strtolower($t);
+                    if (isset($seen[$k])) continue;
+                    $seen[$k] = 1;
+                    $numbers[] = $t;
+                }
+                if ($numbersFromMate && count($numbers) <= 1) $numbers = [];
+            }
             $sqlInput = $input;
             if ($setOrderMode) {
                 unset($sqlInput['data']);
             }
 
             if (isset($sqlInput['code'])) unset($sqlInput['code']);
+            if (!empty($numbers)) {
+                if (isset($sqlInput['mate'])) unset($sqlInput['mate']);
+                if (isset($sqlInput['numbers'])) unset($sqlInput['numbers']);
+            }
             $sql=fastSql($sqlInput,[
                 [['mate'=>'name|py|number|spec'],'fullLike'],
                 ['brand','fullEq'],
@@ -99,6 +140,11 @@ class Service extends Acl {
             if ($setOrderMode) {
                 $sql[] = ['data','like',$dataText.'%'];
             }
+            if (!empty($numbers)) {
+                $sql[] = ['number','in',$numbers];
+            }
+            $categoryGroups = [];
+            $categoryIds = [];
             //商品分类树结构查询
             if(existFull($input,['category'])){
                 $cat=$input['category'];
@@ -113,17 +159,37 @@ class Service extends Acl {
                     $cat=array_filter(explode(',',$cat),function($v){return $v!=='';});
                 }
                 if(is_array($cat)){
-                    $ids=[];
                     foreach ($cat as $cid) {
                         if($cid===null || $cid==='') continue;
                         if(!is_numeric($cid) || intval($cid)<=0) continue;
-                        $ids=array_merge($ids,findTreeArr('category',$cid,'id'));
+                        $groupIds = array_values(array_unique(findTreeArr('category',$cid,'id')));
+                        if(empty($groupIds)) continue;
+                        $categoryGroups[] = $groupIds;
+                        $categoryIds = array_merge($categoryIds,$groupIds);
                     }
-                    $ids=array_values(array_unique($ids));
-                    empty($ids)||$sql[]=['category','in',$ids];
                 }else{
-                    $sql[]=['category','in',findTreeArr('category',$cat,'id')];
+                    $groupIds = array_values(array_unique(findTreeArr('category',$cat,'id')));
+                    if(!empty($groupIds)){
+                        $categoryGroups[] = $groupIds;
+                        $categoryIds = $groupIds;
+                    }
                 }
+            }
+            $categoryIds = array_values(array_unique($categoryIds));
+            if ($setOrderMode && !empty($categoryGroups)) {
+                $comboQuery = Db::name('goods')->where($sql)->where([['data','<>','']])->field(['data'])->group('data');
+                foreach ($categoryGroups as $groupIds) {
+                    $escapedIds = array_map('intval',$groupIds);
+                    empty($escapedIds) || $comboQuery = $comboQuery->having('SUM(CASE WHEN category IN ('.implode(',',$escapedIds).') THEN 1 ELSE 0 END) > 0');
+                }
+                $matchedSetData = array_values(array_unique(array_filter(array_column($comboQuery->select()->toArray(),'data'))));
+                if (empty($matchedSetData)) {
+                    return json(['state' => 'success','count' => 0,'info' => []]);
+                }
+                $sql[] = ['data','in',$matchedSetData];
+            }
+            if(!empty($categoryIds)){
+                $sql[]=['category','in',$categoryIds];
             }
             $orSql=[];
             if(existFull($input,['code'])){
@@ -691,6 +757,8 @@ class Service extends Acl {
             $sheet->getColumnDimension('H')->setWidth(10);
             $sheet->getColumnDimension('I')->setWidth(14);
             $sheet->getColumnDimension('J')->setWidth(14);
+            $sheet->getColumnDimension('K')->setWidth(10);
+            $sheet->getColumnDimension('L')->setWidth(10);
 
             $setCell=function($r,$c,$val) use ($sheet){
                 $sheet->setCellValueByColumnAndRow(intval($c),intval($r),$val);
@@ -701,7 +769,7 @@ class Service extends Acl {
                 return $sheet->getCellByColumnAndRow(intval($c1),intval($r1));
             };
             $applyBorder=function($r1,$r2) use ($sheet){
-                $sheet->getStyle('A'.$r1.':J'.$r2)->applyFromArray([
+                $sheet->getStyle('A'.$r1.':L'.$r2)->applyFromArray([
                     'borders'=>[
                         'allBorders'=>[
                             'borderStyle'=>Border::BORDER_THIN,
@@ -725,15 +793,18 @@ class Service extends Acl {
                 $number=isset($payload['number'])?strval($payload['number']):'';
                 $freight=isset($payload['freight'])?floatval($payload['freight']):0;
                 $deposit=isset($payload['deposit'])?floatval($payload['deposit']):0;
+                $noteText=isset($payload['noteText'])?strval($payload['noteText']):'';
                 $totalQty=isset($payload['totalQty'])?floatval($payload['totalQty']):0;
                 $totalRmb=isset($payload['totalRmb'])?floatval($payload['totalRmb']):0;
                 $totalUsd=isset($payload['totalUsd'])?floatval($payload['totalUsd']):0;
+                $totalWeight=isset($payload['totalWeight'])?floatval($payload['totalWeight']):0;
+                $totalVolume=isset($payload['totalVolume'])?floatval($payload['totalVolume']):0;
                 $totalWithFreight=isset($payload['totalWithFreight'])?floatval($payload['totalWithFreight']):0;
                 $balance=isset($payload['balance'])?floatval($payload['balance']):0;
                 $rows=isset($payload['rows'])?$payload['rows']:[];
                 is_array($rows)||($rows=[]);
 
-                $merge(1,1,1,10)->setValue('Kim Bags    CUSTOMER ORDER    希悦箱包');
+                $merge(1,1,1,12)->setValue('Kim Bags    CUSTOMER ORDER    希悦箱包');
                 $sheet->getRowDimension(1)->setRowHeight(26);
                 $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(16);
                 $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
@@ -749,21 +820,21 @@ class Service extends Acl {
                     $sheet->getStyle('A'.$r)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
                     $sheet->getStyle('A'.$r)->getFont()->setSize(11);
                 }
-                $merge(2,7,5,10)->setValue('WeChat / WhatsApp');
+                $merge(2,7,5,12)->setValue('WeChat / WhatsApp');
                 $sheet->getStyle('G2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
 
                 $metaStart=6;
                 $merge($metaStart,1,$metaStart,5)->setValue('CUSTOMER：'.$customerName);
-                $merge($metaStart,6,$metaStart,10)->setValue('ORDER DATE：'.$orderDate);
+                $merge($metaStart,6,$metaStart,12)->setValue('ORDER DATE：'.$orderDate);
                 $merge($metaStart+1,1,$metaStart+1,5)->setValue('NUMBER：'.$number);
-                $merge($metaStart+1,6,$metaStart+1,10)->setValue('DELIVERY DATE：'.$deliveryDate);
+                $merge($metaStart+1,6,$metaStart+1,12)->setValue('DELIVERY DATE：'.$deliveryDate);
                 $merge($metaStart+2,1,$metaStart+2,5)->setValue('ADD：'.$customerAdd);
-                $merge($metaStart+2,6,$metaStart+2,10)->setValue('Shipping Mark：'.$customerMark);
+                $merge($metaStart+2,6,$metaStart+2,12)->setValue('Shipping Mark：'.$customerMark);
                 $applyBorder($metaStart,$metaStart+2);
                 for($r=$metaStart;$r<=$metaStart+2;$r++){
                     $sheet->getRowDimension($r)->setRowHeight(20);
-                    $sheet->getStyle('A'.$r.':J'.$r)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
-                    $sheet->getStyle('A'.$r.':J'.$r)->getFont()->setSize(11);
+                    $sheet->getStyle('A'.$r.':L'.$r)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+                    $sheet->getStyle('A'.$r.':L'.$r)->getFont()->setSize(11);
                 }
 
                 $tableHeaderRow=10;
@@ -774,9 +845,11 @@ class Service extends Acl {
                 $setCell($tableHeaderRow,8,'U/PRICE');
                 $setCell($tableHeaderRow,9,'AMOUNT');
                 $setCell($tableHeaderRow,10,$exchangeRate?("USD Price\n1USD=".$exchangeRate."RMB"):'USD Price');
+                $setCell($tableHeaderRow,11,"KG");
+                $setCell($tableHeaderRow,12,"CBM");
                 $sheet->getRowDimension($tableHeaderRow)->setRowHeight(34);
-                $sheet->getStyle('A'.$tableHeaderRow.':J'.$tableHeaderRow)->getFont()->setBold(true)->setSize(11);
-                $sheet->getStyle('A'.$tableHeaderRow.':J'.$tableHeaderRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+                $sheet->getStyle('A'.$tableHeaderRow.':L'.$tableHeaderRow)->getFont()->setBold(true)->setSize(11);
+                $sheet->getStyle('A'.$tableHeaderRow.':L'.$tableHeaderRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
                 $sheet->getStyle('J'.$tableHeaderRow)->getFont()->getColor()->setARGB('FFD40000');
                 $applyBorder($tableHeaderRow,$tableHeaderRow);
 
@@ -798,6 +871,8 @@ class Service extends Acl {
                     $sheet->mergeCellsByColumnAndRow(8,$start,8,$end);
                     $sheet->mergeCellsByColumnAndRow(9,$start,9,$end);
                     $sheet->mergeCellsByColumnAndRow(10,$start,10,$end);
+                    $sheet->mergeCellsByColumnAndRow(11,$start,11,$end);
+                    $sheet->mergeCellsByColumnAndRow(12,$start,12,$end);
 
                     $noVal=isset($row['no'])?$row['no']:($idx+1);
                     $setCell($start,1,$noVal);
@@ -807,9 +882,12 @@ class Service extends Acl {
                     $setCell($start,8,$uPriceText);
                     $setCell($start,9,$moneyToNumber(isset($row['amount'])?$row['amount']:0));
                     $setCell($start,10,$moneyToNumber(isset($row['usd'])?$row['usd']:0));
+                    $setCell($start,11,isset($row['weight'])?floatval($row['weight']):0);
+                    $setCell($start,12,isset($row['volume'])?floatval($row['volume']):0);
+                    $sheet->getStyle('I'.$start.':L'.$start)->getNumberFormat()->setFormatCode('#,##0.000');
                     $sheet->getStyle('I'.$start.':J'.$start)->getNumberFormat()->setFormatCode('#,##0.00');
 
-                    $sheet->getStyle('A'.$start.':J'.$end)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+                    $sheet->getStyle('A'.$start.':L'.$end)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
                     $sheet->getStyle('B'.$start)->getFont()->setBold(true)->setSize(12);
 
                     for($line=0;$line<$picLines;$line++){
@@ -861,12 +939,28 @@ class Service extends Acl {
                 $setCell($freightRow,8,$freight);
                 $setCell($freightRow,9,$totalRmb);
                 $setCell($freightRow,10,$totalUsd);
-                $sheet->getStyle('A'.$freightRow.':J'.$freightRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
+                $setCell($freightRow,11,$totalWeight);
+                $setCell($freightRow,12,$totalVolume);
+                $sheet->getStyle('A'.$freightRow.':L'.$freightRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
                 $sheet->getStyle('H'.$freightRow.':J'.$freightRow)->getNumberFormat()->setFormatCode('#,##0.00');
+                $sheet->getStyle('K'.$freightRow.':L'.$freightRow)->getNumberFormat()->setFormatCode('#,##0.000');
                 $applyBorder($freightRow,$freightRow);
                 $cursor++;
 
                 $sumStart=$cursor+1;
+                $noteText=trim($noteText);
+                $merge($sumStart,1,$sumStart+2,6)->setValue("NOTE:\n".$noteText);
+                $sheet->getStyle('A'.$sumStart.':F'.($sumStart+2))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT)->setVertical(Alignment::VERTICAL_TOP)->setWrapText(true);
+                $sheet->getStyle('A'.$sumStart)->getFont()->setBold(true)->getColor()->setARGB('FFD40000');
+                $sheet->getStyle('A'.$sumStart.':F'.($sumStart+2))->getFont()->setSize(11);
+                $sheet->getStyle('A'.$sumStart.':F'.($sumStart+2))->applyFromArray([
+                    'borders'=>[
+                        'allBorders'=>[
+                            'borderStyle'=>Border::BORDER_THIN,
+                            'color'=>['argb'=>'FF333333']
+                        ]
+                    ]
+                ]);
                 $merge($sumStart,7,$sumStart,8)->setValue('TOTAL');
                 $setCell($sumStart,9,$totalWithFreight);
                 $merge($sumStart+1,7,$sumStart+1,8)->setValue('DEPOSIT');

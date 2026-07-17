@@ -575,7 +575,7 @@
     >
       <transition name="el-fade-in">
         <template v-if="print.dialog">
-          <SorPrint action="sell/get" :source="print.source"></SorPrint>
+          <SorPrint action="sell/get" :source="print.source" :summary-enabled="true"></SorPrint>
         </template>
       </transition>
     </el-dialog>

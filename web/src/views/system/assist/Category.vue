@@ -12,6 +12,21 @@
 		<el-table :data="tableData" height="calc(100% - 60px)" :tree-props="{children:'sub'}" row-key="id" border>
 			<el-table-column prop="name" label="类别名称" width="220px"></el-table-column>
 			<el-table-column prop="sort" label="类别排序" align="center" width="100px"></el-table-column>
+			<el-table-column label="重量(kg)" align="center" width="120px">
+				<template slot-scope="scope">
+					{{ formatDecimal(scope.row.weight) }}
+				</template>
+			</el-table-column>
+			<el-table-column label="体积(cbm)" align="center" width="120px">
+				<template slot-scope="scope">
+					{{ formatDecimal(scope.row.volume) }}
+				</template>
+			</el-table-column>
+			<el-table-column label="出厂价" align="center" width="120px">
+				<template slot-scope="scope">
+					{{ formatMoney(scope.row.factory_price) }}
+				</template>
+			</el-table-column>
 			<el-table-column prop="data" label="备注信息" align="center" width="200px"></el-table-column>
 			<el-table-column prop="set" label="相关操作" align="center" width="160px">
 				<template slot-scope="scope">
@@ -24,10 +39,10 @@
 				</template>
 			</el-table-column>
 		</el-table>
-		<el-dialog :visible.sync="dialog" title="详情" width="420px" v-madeDialog>
+		<el-dialog :visible.sync="dialog" title="详情" width="460px" v-madeDialog>
 			<transition name="el-fade-in">
 				<template v-if="dialog">
-					<el-form :model="form" :rules="rules" ref="form" label-width="80px" >
+					<el-form :model="form" :rules="rules" ref="form" label-width="90px" >
 						<el-form-item label="类别名称" prop="name">
 							<el-input placeholder="请输入类别名称" v-model="form.name"></el-input>
 						</el-form-item>
@@ -36,6 +51,19 @@
 						</el-form-item>
 						<el-form-item label="类别排序" prop="sort">
 							<el-input placeholder="请输入类别排序" v-model="form.sort"></el-input>
+						</el-form-item>
+						<el-form-item label="重量" prop="weight">
+							<el-input placeholder="请输入重量" v-model="form.weight" @blur="formatField('weight')">
+								<template slot="append">kg</template>
+							</el-input>
+						</el-form-item>
+						<el-form-item label="体积" prop="volume">
+							<el-input placeholder="请输入体积" v-model="form.volume" @blur="formatField('volume')">
+								<template slot="append">cbm</template>
+							</el-input>
+						</el-form-item>
+						<el-form-item label="出厂价" prop="factory_price">
+							<el-input placeholder="请输入出厂价" v-model="form.factory_price" @blur="formatMoneyField('factory_price')"></el-input>
 						</el-form-item>
 						<el-form-item label="备注信息">
 							<el-input placeholder="请输入备注信息" v-model="form.data"></el-input>
@@ -68,6 +96,9 @@
 					name:"",
 					pid:null,
 					sort:0,
+					weight:"0.00000",
+					volume:"0.00000",
+					factory_price:"0.00",
 					data:""
 				},
 				rules:{
@@ -88,8 +119,32 @@
 							trigger: "blur"
 						},
 						{
-							validator: (rule,value,callback)=>{
+							validator: (_rule,value,callback)=>{
 								this.$lib.validate('number',value)?callback():callback(new Error('类别排序不正确'));
+							},
+							trigger: "blur"
+						}
+					],
+					weight: [
+						{
+							validator: (_rule,value,callback)=>{
+								this.validateDecimalField(value, '重量', callback);
+							},
+							trigger: "blur"
+						}
+					],
+					volume: [
+						{
+							validator: (_rule,value,callback)=>{
+								this.validateDecimalField(value, '体积', callback);
+							},
+							trigger: "blur"
+						}
+					],
+					factory_price: [
+						{
+							validator: (_rule,value,callback)=>{
+								this.validateMoneyField(value, '出厂价', callback);
 							},
 							trigger: "blur"
 						}
@@ -115,6 +170,50 @@
 			}
 		},
 		methods:{
+			formatDecimal(value) {
+				return this.normalizeDecimal(value);
+			},
+			formatMoney(value) {
+				return this.normalizeMoney(value);
+			},
+			normalizeDecimal(value) {
+				const text = value === null || value === undefined || value === "" ? "0" : String(value).trim();
+				const number = Number(text);
+				if (!Number.isFinite(number) || number < 0) {
+					return "0.00000";
+				}
+				return number.toFixed(5);
+			},
+			normalizeMoney(value) {
+				const text = value === null || value === undefined || value === "" ? "0" : String(value).trim();
+				const number = Number(text);
+				if (!Number.isFinite(number) || number < 0) {
+					return "0.00";
+				}
+				return number.toFixed(2);
+			},
+			validateDecimalField(value, label, callback) {
+				const text = value === null || value === undefined || value === "" ? "0" : String(value).trim();
+				if (!/^\d+(\.\d+)?$/.test(text)) {
+					callback(new Error(`${label}格式不正确`));
+					return;
+				}
+				callback();
+			},
+			validateMoneyField(value, label, callback) {
+				const text = value === null || value === undefined || value === "" ? "0" : String(value).trim();
+				if (!/^\d+(\.\d+)?$/.test(text)) {
+					callback(new Error(`${label}格式不正确`));
+					return;
+				}
+				callback();
+			},
+			formatField(field) {
+				this.form[field] = this.normalizeDecimal(this.form[field]);
+			},
+			formatMoneyField(field) {
+				this.form[field] = this.normalizeMoney(this.form[field]);
+			},
 			//获取数据
 			record(){
 				this.$axios.post("category/record").then(result => {
@@ -142,6 +241,9 @@
 					this.$axios.post("category/get", {id: id}).then(result => {
 						if (result.state == "success") {
 							this.form = result.info;
+							this.form.weight = this.normalizeDecimal(this.form.weight);
+							this.form.volume = this.normalizeDecimal(this.form.volume);
+							this.form.factory_price = this.normalizeMoney(this.form.factory_price);
 							this.dialog = true;//显示弹层
 						} else if (result.state == "error") {
 							this.$message({
@@ -163,7 +265,12 @@
 			save() {
 				this.$refs["form"].validate(valid => {
 					if (valid) {
-						this.$axios.post("category/save", this.form).then(result => {
+						const form = Object.assign({}, this.form, {
+							weight: this.normalizeDecimal(this.form.weight),
+							volume: this.normalizeDecimal(this.form.volume),
+							factory_price: this.normalizeMoney(this.form.factory_price)
+						});
+						this.$axios.post("category/save", form).then(result => {
 							if (result.state == "success") {
 								this.record();
 								this.dialog=false;

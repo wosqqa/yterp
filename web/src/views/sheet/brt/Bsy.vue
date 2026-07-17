@@ -47,41 +47,45 @@
 			</el-button-group>
 		</div>
 		<el-divider></el-divider>
-		<el-table
-			ref="table"
-			:data="tableData"
-			height="calc(100% - 90px)"
-			border
-			v-madeTable
-		>
-			<template v-if="tableType==1">
-				<el-table-column prop="supplier.name" label="供应商" align="center" width="160px"></el-table-column>
-			</template>
-			<template v-if="tableType==2">
-				<el-table-column prop="user.name" label="用户" align="center" width="160px"></el-table-column>
-			</template>
-			<template v-if="tableType==3">
-				<el-table-column prop="people.name" label="关联人员" align="center" width="160px"></el-table-column>
-			</template>
-			<el-table-column prop="goodsData.name" label="商品名称" align="center" width="160px"></el-table-column>
-			<el-table-column prop="attr" label="辅助属性" align="center" width="120px"></el-table-column>
-			<el-table-column prop="warehouseData.name" label="仓库" align="center" width="120px"></el-table-column>
-			<el-table-column prop="unit" label="单位" align="center" width="90px"></el-table-column>
-			<el-table-column label="采购单" align="center">
-				<el-table-column prop="buy.price" label="单价" align="center" width="90px"></el-table-column>
-				<el-table-column prop="buy.nums" label="数量" align="center" width="90px"></el-table-column>
-				<el-table-column prop="buy.money" label="金额" align="center" width="90px"></el-table-column>
-			</el-table-column>
-			<el-table-column label="采购退货单" align="center">
-				<el-table-column prop="bre.price" label="单价" align="center" width="90px"></el-table-column>
-				<el-table-column prop="bre.nums" label="数量" align="center" width="90px"></el-table-column>
-				<el-table-column prop="bre.money" label="金额" align="center" width="90px"></el-table-column>
-			</el-table-column>
-			<el-table-column label="汇总" align="center">
-				<el-table-column prop="summary.nums" label="数量" align="center" width="90px"></el-table-column>
-				<el-table-column prop="summary.money" label="金额" align="center" width="90px"></el-table-column>
-			</el-table-column>
-		</el-table>
+		<div class="content">
+			<el-table
+				ref="table"
+				class="mainTable"
+				:data="tableData"
+				height="100%"
+				border
+				v-madeTable
+			>
+				<template v-if="tableType==1">
+					<el-table-column prop="supplier.name" label="供应商" align="center" width="160px"></el-table-column>
+				</template>
+				<template v-if="tableType==2">
+					<el-table-column prop="user.name" label="用户" align="center" width="160px"></el-table-column>
+				</template>
+				<template v-if="tableType==3">
+					<el-table-column prop="people.name" label="关联人员" align="center" width="160px"></el-table-column>
+				</template>
+				<el-table-column prop="goodsData.name" label="商品名称" align="center" width="160px"></el-table-column>
+				<el-table-column prop="attr" label="辅助属性" align="center" width="120px"></el-table-column>
+				<el-table-column prop="warehouseData.name" label="仓库" align="center" width="120px"></el-table-column>
+				<el-table-column prop="unit" label="单位" align="center" width="90px"></el-table-column>
+				<el-table-column label="采购单" align="center">
+					<el-table-column prop="buy.price" label="单价" align="center" width="90px"></el-table-column>
+					<el-table-column prop="buy.nums" label="数量" align="center" width="90px"></el-table-column>
+					<el-table-column prop="buy.money" label="金额" align="center" width="90px"></el-table-column>
+				</el-table-column>
+				<el-table-column label="采购退货单" align="center">
+					<el-table-column prop="bre.price" label="单价" align="center" width="90px"></el-table-column>
+					<el-table-column prop="bre.nums" label="数量" align="center" width="90px"></el-table-column>
+					<el-table-column prop="bre.money" label="金额" align="center" width="90px"></el-table-column>
+				</el-table-column>
+				<el-table-column label="汇总" align="center">
+					<el-table-column prop="summary.nums" label="数量" align="center" width="90px"></el-table-column>
+					<el-table-column prop="summary.money" label="金额" align="center" width="90px"></el-table-column>
+				</el-table-column>
+			</el-table>
+			<CategorySummaryPanel :rows="tableData"></CategorySummaryPanel>
+		</div>
 		<el-pagination class="tablePagination" :current-page.sync="page.current" :total="page.total" :page-size.sync="page.size"
 		 :page-sizes="page.sizes" :pager-count="page.count" @size-change="record(1)" @current-change="record(0)" layout="prev,pager,next,jumper,sizes,total,slot">
 			<PageStatus :config="page.status" :model="tableData"></PageStatus>
@@ -91,11 +95,13 @@
 <script>
 	import NodList from "@/components/lib/NodList";
 	import PageStatus from "@/components/lib/PageStatus";
+	import CategorySummaryPanel from "@/components/lib/CategorySummaryPanel";
 	export default {
 		name: "Bsy",
 		components: {
 			NodList,
-			PageStatus
+			PageStatus,
+			CategorySummaryPanel
 		},
 		data() {
 			return {
@@ -218,6 +224,13 @@
 	.layout {
 		display: flex;
 		justify-content: space-between;
+	}
+	.content{
+		display: flex;
+		height: calc(100% - 90px);
+	}
+	.mainTable{
+		flex: 1;
 	}
 	.el-table >>> .el-table__row--level-1{
 		background: #fcfcfc;

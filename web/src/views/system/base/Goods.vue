@@ -51,6 +51,7 @@
 				</template>
 				<el-button @click="toggleView">{{ viewMode ? '列表' : '视图' }}</el-button>
 				<el-button @click="togglePics">{{ picMode ? '隐藏图片' : '图片' }}</el-button>
+				<el-button @click="openQuotePage">查看报价表</el-button>
 				<el-button @click="reload" >刷新</el-button>
 			</el-button-group>
 		</div>
@@ -1127,6 +1128,15 @@
 			//切换页面
 			switchPage(key) {
 			    this.$bus.emit('switchPage', key, true); //切换页面
+			},
+			openQuotePage() {
+				this.$router.push({
+					name: "goodsQuote",
+					query: {
+						quoteSearch: encodeURIComponent(JSON.stringify(this.searchFrom)),
+						t: String(Date.now())
+					}
+				});
 			},
 			//页面刷新
 			reload() {

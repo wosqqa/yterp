@@ -56,9 +56,12 @@
                   <el-input size="mini" v-model="scope.row.nums" @input="numsChange(scope.row)"></el-input>
                 </template>
               </el-table-column>
-              <el-table-column label="" width="60px" align="center">
+              <el-table-column label="" width="70px" align="center">
                 <template slot-scope="scope">
-                  <el-button size="mini" type="text" @click="removeSelected(scope.row)">移除</el-button>
+                  <div class="selectedActions">
+                    <el-button size="mini" type="text" @click="removeSelected(scope.row)">移除</el-button>
+                    <el-button size="mini" type="text" @click="viewSelected(scope.row)">查看</el-button>
+                  </div>
                 </template>
               </el-table-column>
             </el-table>
@@ -97,7 +100,19 @@
                 :key="item.id"
                 class="goodsCard"
               >
-                <div class="cardImg" @click.stop="onCardImgClick(item)">
+                <div
+                  class="cardImg"
+                  @click.stop="onCardImgClick(item)"
+                  @mousedown.middle.prevent.stop="onCardImgMiddleClick(item)"
+                >
+                  <button
+                    v-if="pickedQty(item.id) > 0"
+                    class="cardMinusBtn"
+                    type="button"
+                    @click.stop="decrementPicked(item)"
+                  >
+                    <i class="el-icon-minus"></i>
+                  </button>
                   <el-image v-if="getImgUrl(item)" :src="getImgUrl(item)" fit="contain">
                     <div slot="error" class="imgError">
                       <i class="el-icon-picture-outline"></i>
@@ -111,7 +126,7 @@
                   <span class="metaLeft">{{ item.number }}</span>
                   <span class="metaRight">{{ item.sell }}</span>
                 </div>
-                <div v-if="isPicked(item.id)" class="pickedMask">已选</div>
+                <div v-if="pickedQty(item.id) > 0" class="pickedMask">已选{{ pickedQty(item.id) }}</div>
               </div>
             </div>
           </div>
@@ -237,8 +252,30 @@ export default {
     }
   },
   methods: {
+    splitMateNumbers(text) {
+      const raw = text != null ? String(text).trim() : "";
+      if (!raw) return [];
+      if (!/[,，]/.test(raw)) return [];
+      const parts = raw
+        .split(/[\s,，]+/)
+        .map(v => String(v).trim())
+        .filter(v => v);
+      if (parts.length <= 1) return [];
+      const seen = {};
+      const list = [];
+      parts.forEach(v => {
+        const k = v.toLowerCase();
+        if (seen[k]) return;
+        seen[k] = 1;
+        list.push(v);
+      });
+      return list;
+    },
     onCardImgClick(item) {
       this.pickIncLast(item);
+    },
+    onCardImgMiddleClick(item) {
+      this.pickNewLine(item);
     },
     onCardMetaClick(item) {
       if (Date.now() - Number(this.lastComboClickAt || 0) < 500) return;
@@ -297,6 +334,14 @@ export default {
         },
         this.searchFrom
       );
+      const mateNumbers = this.splitMateNumbers(this.searchFrom && this.searchFrom.mate);
+      if (mateNumbers.length > 0) {
+        parm.numbers = mateNumbers;
+        delete parm.mate;
+        if (mateNumbers.length > (Number(parm.limit) || 0)) {
+          parm.limit = mateNumbers.length;
+        }
+      }
       const dataText = this.searchFrom && this.searchFrom.data != null ? String(this.searchFrom.data).trim() : "";
       if (!dataText && this.recordAction && /goodsRecord/i.test(String(this.recordAction))) {
         parm.sort = "numberAsc";
@@ -439,6 +484,13 @@ export default {
       this.selectedLines = this.selectedLines.concat([line]);
       this.emitInput();
     },
+    pickNewLine(item) {
+      if (!item || !item.id) return;
+      const line = this.normalizeSelectedLine(this.$lib.extend(true, {}, item, { nums: 1, attr: "" }));
+      if (!line) return;
+      this.selectedLines = this.selectedLines.concat([line]);
+      this.emitInput();
+    },
     pickIncLast(item) {
       if (!item || !item.id) return;
       const idx = this.findLastIndexByGoodsId(item.id);
@@ -479,11 +531,46 @@ export default {
       if (!gid) return false;
       return this.selectedLines.some(r => Number(r && r.id) === gid);
     },
+    pickedQty(id) {
+      const gid = Number(id);
+      if (!gid) return 0;
+      let total = this.$calc.chain(0);
+      this.selectedLines.forEach(row => {
+        if (Number(row && row.id) !== gid) return;
+        total.add(Number(row && row.nums) || 0);
+      });
+      return total.done();
+    },
     removeSelected(row) {
       const lid = row && row.lineId != null ? String(row.lineId) : "";
       if (!lid) return;
       this.selectedLines = this.selectedLines.filter(r => String(r && r.lineId) !== lid);
       this.emitInput();
+    },
+    decrementLine(row) {
+      if (!row) return false;
+      const next = (Number(row.nums) || 0) - 1;
+      if (next <= 0) {
+        this.removeSelected(row);
+        return true;
+      }
+      row.nums = next;
+      this.selectedLines = this.selectedLines.slice();
+      this.emitInput();
+      return true;
+    },
+    decrementPicked(item) {
+      if (!item || !item.id) return;
+      const idx = this.findLastIndexByGoodsId(item.id);
+      if (idx === -1) return;
+      this.decrementLine(this.selectedLines[idx]);
+    },
+    viewSelected(row) {
+      if (!row) return;
+      const current = (Array.isArray(this.tableData) ? this.tableData : []).find(
+        item => Number(item && item.id) === Number(row && row.id)
+      );
+      this.onCardMetaClick(current || row);
     },
     clearSelected() {
       this.selectedLines = [];
@@ -493,7 +580,7 @@ export default {
     selectedSelectionChange(rows) {
       this.batchSelected = Array.isArray(rows) ? rows : [];
     },
-    selectedRowClick(row, column, event) {
+    selectedRowClick(row, _column, event) {
       if (!row) return;
       const target = event && event.target ? event.target : null;
       if (target && typeof target.closest === "function") {
@@ -618,10 +705,11 @@ export default {
   display: grid;
   grid-template-columns: repeat(auto-fill, 100px);
   justify-content: start;
-  gap: 8px;
+  gap: 12px;
   padding-right: 10px;
 }
 .goodsCard {
+  box-sizing: border-box;
   position: relative;
   border: 1px solid #ebeef5;
   border-radius: 6px;
@@ -631,11 +719,36 @@ export default {
   cursor: pointer;
 }
 .cardImg {
+  position: relative;
   width: 100%;
   height: 130px;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.cardMinusBtn {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  z-index: 3;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 4px;
+  background: rgba(245, 108, 108, 0.95);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+.cardMinusBtn i {
+  font-size: 12px;
+  font-weight: 600;
+}
+.cardMinusBtn:focus {
+  outline: none;
 }
 .cardImg >>> .el-image {
   width: 100%;
@@ -692,6 +805,7 @@ export default {
   gap: 10px;
 }
 .selectedImg {
+  position: relative;
   width: 70px;
   height: 70px;
   display: flex;
@@ -712,5 +826,15 @@ export default {
   color: #c0c4cc;
   background: #fafafa;
   border-radius: 4px;
+}
+.selectedActions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+}
+.selectedActions >>> .el-button + .el-button {
+  margin-left: 0;
+  margin-top: 4px;
 }
 </style>

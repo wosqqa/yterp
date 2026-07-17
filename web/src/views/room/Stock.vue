@@ -66,54 +66,68 @@
 				</div>
 			</div>
 		</div>
-		<el-table
-			v-else
-			:data="tableData"
-			:tree-props="{children: 'attr'}"
-			row-key="key"
-			height="calc(100% - 90px)"
-			border
-			v-madeTable
-		>
-			<el-table-column v-if="picMode" label="图片" align="center" width="100px" fixed="left">
-				<template slot-scope="scope">
-					<div class="tableImg">
-						<el-image v-if="getImgUrl(scope.row)" :src="getImgUrl(scope.row)" fit="contain">
-							<div slot="error" class="imgErrorMini">
+		<div v-else class="content">
+			<el-table
+				ref="table"
+				class="mainTable"
+				:data="tableData"
+				:tree-props="{children: 'attr'}"
+				row-key="key"
+				height="100%"
+				border
+				v-madeTable
+			>
+				<el-table-column v-if="picMode" label="图片" align="center" width="100px" fixed="left">
+					<template slot-scope="scope">
+						<div class="tableImg">
+							<el-image v-if="getImgUrl(scope.row)" :src="getImgUrl(scope.row)" fit="contain">
+								<div slot="error" class="imgErrorMini">
+									<i class="el-icon-picture-outline"></i>
+								</div>
+							</el-image>
+							<div v-else class="imgErrorMini">
 								<i class="el-icon-picture-outline"></i>
 							</div>
-						</el-image>
-						<div v-else class="imgErrorMini">
-							<i class="el-icon-picture-outline"></i>
 						</div>
+					</template>
+				</el-table-column>
+				<el-table-column prop="name" label="商品名称" align="left" width="160px" fixed="left"></el-table-column>
+				<el-table-column prop="summary" label="库存数量" align="center" width="120px">
+					<template slot-scope="scope">
+						<span class="stockQty">{{ scope.row.summary }}</span>
+					</template>
+				</el-table-column>
+				<el-table-column label="仓库" align="center">
+					<div v-for="column in tableColumn" :key="column.key">
+						<el-table-column :prop="column.key" :label="column.name" align="center" width="90px"></el-table-column>
 					</div>
-				</template>
-			</el-table-column>
-			<el-table-column prop="name" label="商品名称" align="left" width="160px" fixed="left"></el-table-column>
-			<el-table-column prop="summary" label="库存数量" align="center" width="120px">
-				<template slot-scope="scope">
-					<span class="stockQty">{{ scope.row.summary }}</span>
-				</template>
-			</el-table-column>
-			<el-table-column label="仓库" align="center">
-				<div v-for="column in tableColumn" :key="column.key">
-					<el-table-column :prop="column.key" :label="column.name" align="center" width="90px"></el-table-column>
-				</div>
-			</el-table-column>
-			<el-table-column prop="stock" label="预警阈值" align="center" width="120px"></el-table-column>
-			<el-table-column prop="number" label="商品编号" align="center" width="160px"></el-table-column>
-			<el-table-column prop="spec" label="规格型号" align="center" width="160px"></el-table-column>
-			<el-table-column prop="categoryData.name" label="商品分类" align="center" width="120px"></el-table-column>
-			<el-table-column prop="brand" label="商品品牌" align="center" width="120px"></el-table-column>
-			<el-table-column prop="extension.unit" label="商品单位" align="center" width="120px"></el-table-column>
-			<el-table-column prop="code" label="商品条码" align="center" width="160px"></el-table-column>
-			<el-table-column prop="data" label="商品备注" align="center" width="160px"></el-table-column>
-			<el-table-column prop="set" label="相关操作" align="center" min-width="100px" fixed="right">
-				<template slot-scope="scope">
-					<el-button @click="showStockDetail(scope.row)" size="mini">详情</el-button>
-				</template>
-			</el-table-column>
-		</el-table>
+				</el-table-column>
+				<el-table-column prop="stock" label="预警阈值" align="center" width="120px"></el-table-column>
+				<el-table-column prop="number" label="商品编号" align="center" width="160px"></el-table-column>
+				<el-table-column prop="spec" label="规格型号" align="center" width="160px"></el-table-column>
+				<el-table-column prop="categoryData.name" label="商品分类" align="center" width="120px"></el-table-column>
+				<el-table-column prop="brand" label="商品品牌" align="center" width="120px"></el-table-column>
+				<el-table-column prop="extension.unit" label="商品单位" align="center" width="120px"></el-table-column>
+				<el-table-column prop="code" label="商品条码" align="center" width="160px"></el-table-column>
+				<el-table-column prop="data" label="商品备注" align="center" width="160px"></el-table-column>
+				<el-table-column prop="set" label="相关操作" align="center" min-width="100px" fixed="right">
+					<template slot-scope="scope">
+						<el-button @click="showStockDetail(scope.row)" size="mini">详情</el-button>
+					</template>
+				</el-table-column>
+			</el-table>
+			<CategorySummaryPanel
+				:title="'库存分类汇总'"
+				:price-label="'采购成本'"
+				:money-label="'采购成本'"
+				:total-money-label="'总采购成本'"
+				:rows="stockSummaryRows"
+				:category-path="'category'"
+				:qty-path="'summary'"
+				:default-price-path="'buy'"
+				:editable-price="false"
+			></CategorySummaryPanel>
+		</div>
 		<el-pagination class="tablePagination" :current-page.sync="page.current" :total="page.total" :page-size.sync="page.size"
 		 :page-sizes="page.sizes" :pager-count="page.count" @size-change="record(1)" @current-change="record(0)" layout="prev,pager,next,jumper,sizes,total">
 		</el-pagination>
@@ -123,11 +137,13 @@
 <script>
 	import NodTree from "@/components/lib/NodTree";
 	import StockDetail from "@/components/dialog/StockDetail";
+	import CategorySummaryPanel from "@/components/lib/CategorySummaryPanel";
 	export default {
 		name: "Stock",
 		components: {
 			NodTree,
-			StockDetail
+			StockDetail,
+			CategorySummaryPanel
 		},
 		data() {
 			return {
@@ -169,6 +185,9 @@
 			},
 			viewList() {
 				return this.tableData.filter(row => !row || !row.hasOwnProperty('pid'));
+			},
+			stockSummaryRows() {
+				return this.tableData.filter(row => row && !row.hasOwnProperty('pid'));
 			}
 		},
 		methods: {
@@ -214,6 +233,9 @@
 						this.tableColumn=result.column;
 						this.page.total = result.count;
 						this.$refs["searchPopover"].showPopper = false;
+						this.$nextTick(() => {
+							this.$refs.table && this.$refs.table.doLayout();
+						});
 					} else if (result.state == "error") {
 						this.$message({
 							type: "warning",
@@ -261,6 +283,13 @@
 	.layout {
 		display: flex;
 		justify-content: space-between;
+	}
+	.content{
+		height: calc(100% - 90px);
+		display: flex;
+	}
+	.mainTable{
+		flex: 1;
 	}
 	.el-table >>> .el-table__row--level-1{
 		background: #fcfcfc;

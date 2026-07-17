@@ -33,11 +33,27 @@
 			this.handle();
 		},
 		watch: {
-			model(data){
+			model(){
 				this.handle();
 			}
 		},
 		methods:{
+			getValueByPath(model,key){
+				if(!key)return 0;
+				return String(key).split('.').reduce((result,field)=>{
+					if(result===null || result===undefined){
+						return undefined;
+					}
+					return result[field];
+				},model);
+			},
+			toSafeNumber(value){
+				if(value===null || value===undefined || value===''){
+					return 0;
+				}
+				const num=Number(value);
+				return Number.isFinite(num)?num:0;
+			},
 			//处理数据
 			handle(){
 				let arr=[];
@@ -54,16 +70,16 @@
 						//总和统计
 						let number = this.$calc.chain(0);
 						this.model.map((modelVo)=>{
-						   number.add(eval('modelVo.'+configVo.key));
+						   number.add(this.toSafeNumber(this.getValueByPath(modelVo,configVo.key)));
 						});
 						text=configVo.text+':'+number.done();
 					}else if(configVo.type=='avg'){
 						//平均值统计
 						let number = this.$calc.chain(0);
 						this.model.map((modelVo)=>{
-						   number.add(eval('modelVo.'+configVo.key));
+						   number.add(this.toSafeNumber(this.getValueByPath(modelVo,configVo.key)));
 						});
-						number=this.$calc.chain(number.done()).divide(this.model.length).round(4).done();
+						number=this.model.length>0?this.$calc.chain(number.done()).divide(this.model.length).round(4).done():0;
 						text=configVo.text+':'+number;
 					}
 					configVo.hasOwnProperty('fun')&&(text=configVo.fun(text));

@@ -783,6 +783,7 @@ export default {
           number: r.number,
           spec: r.spec,
           type: r.goodsType,
+          data: r.goodsCombo != null ? String(r.goodsCombo) : "",
           unit: unitData.length > 0 ? "-1" : r.unit,
           units: unitData,
           imgs: r.imgs,
@@ -1534,6 +1535,13 @@ export default {
       this.form.number = "Z" + this.form.number;
       this.form.customer = parm.class.customer;
       this.form.total = parm.class.total;
+      this.form.actual = parm.class.actual;
+      this.form.money = parm.class.actual;
+      this.form.people = parm.class.people;
+      this.form.logistics = parm.class.logistics;
+      this.form.file = parm.class.file;
+      this.form.data = parm.class.data;
+      this.form.more = parm.class.more;
       this.pushGrid(parm.info, false);
     },
     //商品层关闭

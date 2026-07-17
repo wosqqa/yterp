@@ -12,9 +12,9 @@
       </div>
 
       <div class="pillRow" v-if="selectedTypes.length">
-        <button class="pill" v-for="typeName in selectedTypes" :key="typeName" @click="$emit('toggle-type', typeName)">
+        <button class="pill" v-for="typeId in selectedTypes" :key="typeId" @click="$emit('toggle-type', typeId)">
           <span class="xMini" />
-          <span>{{ t('productType') }}: {{ typeName }}</span>
+          <span>{{ t('productType') }}: {{ productTypes.find(type => type.id === typeId)?.label || typeId }}</span>
         </button>
       </div>
 
@@ -34,36 +34,38 @@
       <div class="section">
         <div class="secTitle">{{ t('productType') }}</div>
         <div class="checkList">
-          <label v-for="typeName in productTypes" :key="typeName" class="checkItem">
-            <input type="checkbox" :checked="selectedTypes.includes(typeName)" @change="$emit('toggle-type', typeName)" />
+          <label v-for="typeItem in productTypes" :key="typeItem.id" class="checkItem">
+            <input type="checkbox" :checked="selectedTypes.includes(typeItem.id)" @change="$emit('toggle-type', typeItem.id)" />
             <span class="checkBox" />
-            <span class="checkText">{{ typeName }}</span>
+            <span class="checkText">{{ typeItem.label }}</span>
           </label>
         </div>
       </div>
 
       <div class="bottom">
         <button class="ghost" @click="$emit('clear')">{{ t('clear') }}</button>
-        <button class="primary" @click="$emit('close')">{{ t('apply') }}</button>
+        <button class="primary" @click="$emit('apply')">{{ t('apply') }}</button>
       </div>
     </aside>
   </div>
 </template>
 
 <script setup lang="ts">
+import type { CatalogCategoryOption } from '../composables/mockCatalog'
 import { useI18n } from '../composables/i18n'
 
 defineProps<{
   open: boolean
-  productTypes: string[]
-  selectedTypes: string[]
+  productTypes: CatalogCategoryOption[]
+  selectedTypes: number[]
   inStockOnly: boolean
 }>()
 
 defineEmits<{
   close: []
   clear: []
-  'toggle-type': [type: string]
+  apply: []
+  'toggle-type': [typeId: number]
   'set-in-stock-only': [value: boolean]
 }>()
 

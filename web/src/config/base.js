@@ -12,6 +12,7 @@ function getApiBase() {
       const protocol = window.location.protocol || "http:";
       const port = window.location.port || "";
       if (String(port) === "8083") return `${protocol}//${host}:3000/`;
+      if (String(port) === "8084") return "http://erp.51ppy.com/";
       return `${protocol}//${host}:8000/`;
     }
   } catch (e) {}

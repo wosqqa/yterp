@@ -99,6 +99,8 @@ const Account = () =>
   import(/* webpackChunkName: 'n'*/ "@/views/system/base/Account");
 const Goods = () =>
   import(/* webpackChunkName: 'n'*/ "@/views/system/base/Goods");
+const GoodsQuote = () =>
+  import(/* webpackChunkName: 'n'*/ "@/views/system/base/GoodsQuote");
 //辅助资料
 const Category = () =>
   import(/* webpackChunkName: 'o'*/ "@/views/system/assist/Category");
@@ -722,6 +724,14 @@ const example = new Router({
           component: Goods,
           meta: {
             title: "商品管理",
+          },
+        },
+        {
+          path: "goods-quote",
+          name: "goodsQuote",
+          component: GoodsQuote,
+          meta: {
+            title: "商品报价表",
           },
         },
         {

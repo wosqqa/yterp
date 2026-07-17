@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "nuxt dev --port 3100",
+    "dev": "nuxt dev --host 0.0.0.0 --port 3100",
     "build": "nuxt build",
-    "preview": "nuxt preview --port 3100",
+    "preview": "nuxt preview --host 0.0.0.0 --port 3100",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {

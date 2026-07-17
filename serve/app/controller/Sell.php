@@ -162,14 +162,21 @@ class Sell extends Acl{
     public function get(){
         $input=input('post.');
         if(existFull($input,['parm'])){
-            $class=Sells::where([['id','=',$input['parm']]])->find();
-            $info=SellInfo::with(['goodsData','warehouseData'])->where([['pid','=',$input['parm']]])->order(['id'=>'asc'])->select();
-            $cost=Cost::where([['type','=','sell'],['class','=',$input['parm']]])->order(['id'=>'asc'])->select();
-            $result=['state'=>'success','info'=>[
-                'class'=>$class,
-                'info'=>$info,
-                'cost'=>$cost,
-            ]];
+            $parm=$input['parm'];
+            $class=is_numeric($parm)?Sells::where([['id','=',$parm]])->find():null;
+            empty($class)&&$class=Sells::where([['number','=',$parm]])->find();
+            if(empty($class)){
+                $result=['state'=>'error','info'=>'单据不存在!'];
+            }else{
+                $classId=$class['id'];
+                $info=SellInfo::with(['goodsData','warehouseData'])->where([['pid','=',$classId]])->order(['id'=>'asc'])->select();
+                $cost=Cost::where([['type','=','sell'],['class','=',$classId]])->order(['id'=>'asc'])->select();
+                $result=['state'=>'success','info'=>[
+                    'class'=>$class,
+                    'info'=>$info,
+                    'cost'=>$cost,
+                ]];
+            }
         }else{
             $result=['state'=>'error','info'=>'传入参数不完整!'];
         }
