@@ -53,6 +53,9 @@
 					<el-button @click="batch.dialog=true" >批量</el-button>
 				</template>
 				<el-button @click="reload" >刷新</el-button>
+				<template v-if="store.root == 'all'">
+					<el-button type="primary" @click="goReport" >客户报表</el-button>
+				</template>
 			</el-button-group>
 		</div>
 		<el-divider></el-divider>
@@ -813,6 +816,14 @@
 					type: "success",
 					message: "页面刷新成功!"
 				});
+			},
+			//打开客户报表页面
+			goReport() {
+				if (this.store.root != 'all') {
+					this.$message({ type: "warning", message: "仅管理员可查看客户数据报表!" });
+					return;
+				}
+				this.$router.push({ path: "/system/customerReport" });
 			}
 		}
 	};

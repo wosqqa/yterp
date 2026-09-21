@@ -6,6 +6,22 @@ use app\model\{Goods,RoomInfo};
 use think\facade\{Db,Filesystem};
 use think\exception\ValidateException;
 class Stock extends Acl {
+
+    private function parseStockRange($rangeStr){
+        if(!isset($rangeStr) || $rangeStr===null || $rangeStr==='') return null;
+        $s = trim(strval($rangeStr));
+        if($s==='') return null;
+        if(preg_match('/^\s*(-?\d+(?:\.\d+)?)\s*[-~\x{5230}]\s*(-?\d+(?:\.\d+)?)\s*$/u', $s, $m)){
+            $a = floatval($m[1]); $b = floatval($m[2]);
+            return [$a<=$b?$a:$b, $a<=$b?$b:$a];
+        }
+        if(preg_match('/^\s*(-?\d+(?:\.\d+)?)\s*$/u', $s, $m)){
+            $a = floatval($m[1]);
+            return [0.0, $a];
+        }
+        return null;
+    }
+
     //列表
     public function record(){
         $input=input('post.');
@@ -124,6 +140,27 @@ class Stock extends Acl {
                 }
                 //重建索引
                 $info[$infoKey]['attr']=array_values($info[$infoKey]['attr']);
+            }
+            //库存数量范围过滤
+            $stockRange = $this->parseStockRange($input['stockRange'] ?? null);
+            if($stockRange!==null){
+                $minV = $stockRange[0]; $maxV = $stockRange[1];
+                $filtered = [];
+                foreach ($info as $infoVo) {
+                    $keepAttr = [];
+                    $rowNums = is_numeric($infoVo['summary'])?floatval($infoVo['summary']):0;
+                    $keepRow = ($rowNums >= $minV && $rowNums <= $maxV);
+                    foreach ($infoVo['attr'] as $attrVo) {
+                        $aN = is_numeric($attrVo['summary'])?floatval($attrVo['summary']):0;
+                        if($aN >= $minV && $aN <= $maxV){ $keepAttr[] = $attrVo; }
+                    }
+                    if($keepRow || !empty($keepAttr)){
+                        $infoVo['attr'] = $keepAttr;
+                        $filtered[] = $infoVo;
+                    }
+                }
+                $info = $filtered;
+                $count = count($info);
             }
             $result=[
                 'state'=>'success',
@@ -252,6 +289,26 @@ class Stock extends Acl {
                 }
                 //重建索引
                 $info[$infoKey]['attr']=array_values($info[$infoKey]['attr']);
+            }
+            //（导出）库存数量范围过滤
+            $stockRangeExport = $this->parseStockRange($input['stockRange'] ?? null);
+            if($stockRangeExport!==null){
+                $minE = $stockRangeExport[0]; $maxE = $stockRangeExport[1];
+                $newInfo = [];
+                foreach ($info as $infoVo) {
+                    $keepAttr = [];
+                    $rowN = is_numeric($infoVo['summary'])?floatval($infoVo['summary']):0;
+                    $keepRow = ($rowN >= $minE && $rowN <= $maxE);
+                    foreach ($infoVo['attr'] as $aVo) {
+                        $aN = is_numeric($aVo['summary'])?floatval($aVo['summary']):0;
+                        if($aN >= $minE && $aN <= $maxE) $keepAttr[] = $aVo;
+                    }
+                    if($keepRow || !empty($keepAttr)){
+                        $infoVo['attr'] = $keepAttr;
+                        $newInfo[] = $infoVo;
+                    }
+                }
+                $info = $newInfo;
             }
 		    //结构重组
 		    $source=[];

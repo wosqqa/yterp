@@ -6,6 +6,22 @@ use app\model\{Goods,Warehouse};
 use think\facade\{Db,Filesystem};
 use think\exception\ValidateException;
 class Inventory extends Acl {
+
+    private function parseStockRange($rangeStr){
+        if(!isset($rangeStr) || $rangeStr===null || $rangeStr==='') return null;
+        $s = trim(strval($rangeStr));
+        if($s==='') return null;
+        if(preg_match('/^\s*(-?\d+(?:\.\d+)?)\s*[-~\u5230]\s*(-?\d+(?:\.\d+)?)\s*$/u', $s, $m)){
+            $a = floatval($m[1]); $b = floatval($m[2]);
+            return [$a<=$b?$a:$b, $a<=$b?$b:$a];
+        }
+        if(preg_match('/^\s*(-?\d+(?:\.\d+)?)\s*$/u', $s, $m)){
+            $a = floatval($m[1]);
+            return [0.0, $a];
+        }
+        return null;
+    }
+
     //列表
     public function record(){
         $input=input('post.');
@@ -120,6 +136,27 @@ class Inventory extends Acl {
                     $info[$infoKey]['attr'][$attrKey]['record']=$record;
                 }
             }
+            //库存数量范围过滤
+            $stockRange = $this->parseStockRange($input['stockRange'] ?? null);
+            if($stockRange!==null){
+                $minV = $stockRange[0]; $maxV = $stockRange[1];
+                $filtered = [];
+                foreach ($info as $infoVo) {
+                    $keepAttr = [];
+                    $rowNums = is_numeric($infoVo['summary'])?floatval($infoVo['summary']):0;
+                    $keepRow = ($rowNums >= $minV && $rowNums <= $maxV);
+                    foreach ($infoVo['attr'] as $attrVo) {
+                        $aN = is_numeric($attrVo['summary'])?floatval($attrVo['summary']):0;
+                        if($aN >= $minV && $aN <= $maxV){ $keepAttr[] = $attrVo; }
+                    }
+                    if($keepRow || !empty($keepAttr)){
+                        $infoVo['attr'] = $keepAttr;
+                        $filtered[] = $infoVo;
+                    }
+                }
+                $info = $filtered;
+                $count = count($info);
+            }
             $result=[
                 'state'=>'success',
                 'count'=>$count,
@@ -162,6 +199,39 @@ class Inventory extends Acl {
             }
             //重建索引
             $info[$infoKey]['attr']=array_values($info[$infoKey]['attr']);
+        }
+        //（导出）库存数量范围过滤：需要先按 room 实际汇总再过滤
+        $stockRangeExport = $this->parseStockRange($input['stockRange'] ?? null);
+        if($stockRangeExport!==null){
+            $warehouseIds = Db::name('warehouse')->where(sqlAuth('warehouse',[]))->column('id');
+            $goodsIds = array_column($info,'id');
+            $roomList = empty($goodsIds)||empty($warehouseIds)?[]:Db::name('room')->where([['warehouse','in',$warehouseIds],['goods','in',$goodsIds]])->select()->toArray();
+            $gs = [];
+            $ga = [];
+            foreach ($roomList as $r) {
+                $g = md5_16($r['goods']);
+                $gs[$g] = isset($gs[$g]) ? math()->chain($gs[$g])->add($r['nums'])->done() : $r['nums']+0;
+                if(!empty($r['attr'])){
+                    $a = md5_16($r['goods'].'&'.$r['attr']);
+                    $ga[$a] = isset($ga[$a]) ? math()->chain($ga[$a])->add($r['nums'])->done() : $r['nums']+0;
+                }
+            }
+            $minE = $stockRangeExport[0]; $maxE = $stockRangeExport[1];
+            $newInfo = [];
+            foreach ($info as $infoVo) {
+                $keepAttr = [];
+                $gSum = floatval($gs[md5_16($infoVo['id'])] ?? 0);
+                $keepRow = ($gSum >= $minE && $gSum <= $maxE);
+                foreach ($infoVo['attr'] as $aVo) {
+                    $aSum = floatval($ga[md5_16($infoVo['id'].'&'.$aVo['name'])] ?? 0);
+                    if($aSum >= $minE && $aSum <= $maxE) $keepAttr[] = $aVo;
+                }
+                if($keepRow || !empty($keepAttr)){
+                    $infoVo['attr'] = $keepAttr;
+                    $newInfo[] = $infoVo;
+                }
+            }
+            $info = $newInfo;
         }
 	    //结构重组
 	    $source=[];

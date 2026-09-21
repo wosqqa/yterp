@@ -1,6 +1,6 @@
 import Vue from "vue";
 
-function getApiBase() {
+export function getApiBase() {
   const envBase = (typeof process !== "undefined" && process.env && process.env.VUE_APP_API_BASE) || "";
   if (envBase) {
     const s = String(envBase).trim();
@@ -11,7 +11,6 @@ function getApiBase() {
       const host = window.location.hostname || "127.0.0.1";
       const protocol = window.location.protocol || "http:";
       const port = window.location.port || "";
-      if (String(port) === "8083") return `${protocol}//${host}:3000/`;
       if (String(port) === "8084") return "http://erp.51ppy.com/";
       return `${protocol}//${host}:8000/`;
     }
@@ -20,5 +19,6 @@ function getApiBase() {
 }
 
 Vue.prototype.$base = {
-  web: getApiBase() //后台接口地址
+  web: getApiBase(),
+  getApiBase
 };

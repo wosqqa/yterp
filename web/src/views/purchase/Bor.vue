@@ -247,7 +247,7 @@ export default {
         arrival: "",
         logistics: { key: "auto", name: "自动识别", number: "" },
         file: [],
-        data: goods.data != null ? String(goods.data) : "",
+        data: "",
         examine: 0,
         state: 0,
         more: {},

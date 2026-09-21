@@ -37,26 +37,30 @@
           <div v-if="headerMode !== 'invoice'" class="header">
         <div class="headerLeft">
           <div class="brandRow">
-            <div class="brand">Kim Bags</div>
+            <div class="brand">{{ sellerCompanyEn }}</div>
             <div class="title">CUSTOMER ORDER</div>
-            <div class="cnTitle">希悦箱包</div>
+            <div class="cnTitle">{{ sellerCompanyCn }}</div>
           </div>
-          <div class="line">地址：湖南省邵东市国际商贸城東二区二楼207#783号</div>
           <div class="line">
-            ADD：No. 783, 207 Gallery, Second Floor, East Second District, Shaodong International Business City,
-            Shaodong City, Hunan Province
+            ADD：{{ sellerAddressEn }}
           </div>
-          <div class="line">EMAIL：kimbagfactory@outlook.com</div>
-          <div class="line red">MOB & WhatsApp：+8619535838073 Kim</div>
+          <div class="line">EMAIL：{{ sellerEmail }}</div>
+          <div class="line red">MOB & WhatsApp：{{ sellerMobLine }}</div>
         </div>
         <div class="headerRight">
           <div class="qrGroup">
             <div class="qrBox">
-              <div class="qr"></div>
+              <div v-if="sellerWechatQr" class="qrImgBox">
+                <img class="qrImg" :src="sellerWechatQr" alt="WeChat">
+              </div>
+              <div v-else class="qr qrPlaceholder"></div>
               <div class="qrLabel">WeChat</div>
             </div>
             <div class="qrBox">
-              <div class="qr"></div>
+              <div v-if="sellerWhatsappQr" class="qrImgBox">
+                <img class="qrImg" :src="sellerWhatsappQr" alt="WhatsApp">
+              </div>
+              <div v-else class="qr qrPlaceholder"></div>
               <div class="qrLabel">WhatsApp</div>
             </div>
           </div>
@@ -169,7 +173,18 @@
           </div>
           <div class="td usd">
             <div>USD Price</div>
-            <div class="en red">1USD={{ exchangeRate }}RMB</div>
+            <div class="en red exchangeRateCell" v-if="exchangeRate">
+              <span class="exchangeRatePrefix exchangeRatePrefixScreen">$1=￥</span>
+              <el-input
+                class="exchangeRateInput exchangeRateInputScreen"
+                size="mini"
+                v-model="exchangeRateManual"
+                @blur="exchangeRateManualBlur"
+                @focus.native="selectExchangeRateText($event)"
+                @keyup.enter.native="commitExchangeRateFromEnter"
+              ></el-input>
+              <span class="exchangeRateStaticPrint">$1=￥{{ Number(exchangeRate).toFixed(2) }}</span>
+            </div>
           </div>
           <template v-if="showMetrics">
             <div class="td metric">
@@ -218,12 +233,13 @@
           <div class="td qty big">{{ totalQty }}</div>
           <div class="td price">
             <el-input
-              class="freightInput"
+              class="freightInput freightInputScreen"
               size="mini"
               :value="freightManual"
               @input="freightManual = $event"
               @blur="freightManualBlur"
             ></el-input>
+            <span class="freightStaticPrint">￥{{ formatMoney(freightVal, 0) }}</span>
           </div>
           <div class="td amount">￥{{ totalRmb }}</div>
           <div class="td usd">${{ totalUsd }}</div>
@@ -279,12 +295,13 @@
             <div class="sumLabel redLabel">DEPOSIT</div>
             <div class="sumVal redVal">
               <el-input
-                class="depositInput"
+                class="depositInput depositInputScreen"
                 size="mini"
                 :value="depositManual"
                 @input="depositManual = $event"
                 @blur="depositManualBlur"
               ></el-input>
+              <span class="depositStaticPrint">￥ {{ formatMoney(depositVal, 2) }}</span>
             </div>
           </div>
           <div class="sumRow">
@@ -356,6 +373,7 @@ export default {
       invoiceBankText: "",
       invoiceSaveTimer: null,
       exchangeRate: 6.85,
+      exchangeRateManual: "6.85",
       freightManual: 30,
       depositManual: 0,
       imgQtyHidden: false,
@@ -373,8 +391,23 @@ export default {
         number: "",
         time: "",
         arrival: "",
-        data: ""
+        data: "",
+        user: ""
       },
+      sellerInfo: {
+        companyEn: "",
+        companyCn: "",
+        addressCn: "",
+        addressEn: "",
+        email: "",
+        tel: "",
+        whatsapp: "",
+        contactName: "",
+        wechatQr: "",
+        whatsappQr: "",
+        exchangeRate: ""
+      },
+      sellerInfoLoaded: false,
       summaryWarehouse: "",
       detailRows: [],
       totalPay: "0.00"
@@ -386,6 +419,13 @@ export default {
   watch: {
     source() {
       this.load();
+    },
+    totalRmbVal() {
+      this.refreshInvoiceTotalIfNeeded();
+    },
+    freightVal() {
+      this.refreshInvoiceTotalIfNeeded();
+      this.persistFreightDebounced();
     }
   },
   computed: {
@@ -424,6 +464,62 @@ export default {
     },
     customerMark() {
       return this.customerInfo.data || "";
+    },
+    sellerCompanyEn() {
+      const v = String(this.sellerInfo && this.sellerInfo.companyEn ? this.sellerInfo.companyEn : "").trim();
+      return v;
+    },
+    sellerCompanyCn() {
+      const v = String(this.sellerInfo && this.sellerInfo.companyCn ? this.sellerInfo.companyCn : "").trim();
+      return v;
+    },
+    sellerAddressCn() {
+      const v = String(this.sellerInfo && this.sellerInfo.addressCn ? this.sellerInfo.addressCn : "").trim();
+      return v;
+    },
+    sellerAddressEn() {
+      const v = String(this.sellerInfo && this.sellerInfo.addressEn ? this.sellerInfo.addressEn : "").trim();
+      return v ? v : "No. 783, 207 Gallery, Second Floor, East Second District, Shaodong International Business City, Shaodong City, Hunan Province";
+    },
+    sellerEmail() {
+      const v = String(this.sellerInfo && this.sellerInfo.email ? this.sellerInfo.email : "").trim();
+      return v ? v : "kimbagfactory@outlook.com";
+    },
+    sellerTel() {
+      const v = String(this.sellerInfo && this.sellerInfo.tel ? this.sellerInfo.tel : "").trim();
+      if (v) return v;
+      const whatsapp = String(this.sellerInfo && this.sellerInfo.whatsapp ? this.sellerInfo.whatsapp : "").trim();
+      return whatsapp ? whatsapp : "+8619535838073";
+    },
+    sellerWhatsapp() {
+      const v = String(this.sellerInfo && this.sellerInfo.whatsapp ? this.sellerInfo.whatsapp : "").trim();
+      if (v) return v;
+      const tel = String(this.sellerInfo && this.sellerInfo.tel ? this.sellerInfo.tel : "").trim();
+      return tel ? tel : "+8619535838073";
+    },
+    sellerContactName() {
+      const v = String(this.sellerInfo && this.sellerInfo.contactName ? this.sellerInfo.contactName : "").trim();
+      return v ? v : "Kim";
+    },
+    sellerMobLine() {
+      const parts = [];
+      const whatsapp = this.sellerWhatsapp;
+      const tel = this.sellerTel;
+      const name = this.sellerContactName;
+      if (whatsapp) {
+        if (tel && tel !== whatsapp) parts.push(tel + " / " + whatsapp);
+        else parts.push(whatsapp);
+      } else if (tel) {
+        parts.push(tel);
+      }
+      if (name) parts.push(name);
+      return parts.join(" ");
+    },
+    sellerWechatQr() {
+      return this.sellerInfo && this.sellerInfo.wechatQr ? this.sellerInfo.wechatQr : "";
+    },
+    sellerWhatsappQr() {
+      return this.sellerInfo && this.sellerInfo.whatsappQr ? this.sellerInfo.whatsappQr : "";
     },
     orderDateDisplay() {
       return this.formatDate(this.classData.time);
@@ -913,18 +1009,18 @@ export default {
         const scope = this.getInvoiceScope();
         const seller = localStorage.getItem(this.getInvoiceKey("seller"));
         const to = localStorage.getItem(this.getInvoiceKey("to"));
-        const totalText = localStorage.getItem(this.getInvoiceKey("totalText"));
         const wordsText = localStorage.getItem(this.getInvoiceKey("wordsText"));
         const bankText = localStorage.getItem(this.getInvoiceKey("bankText"));
+        const freightRaw = localStorage.getItem(this.getInvoiceKey("freight"));
 
         const hasAnyScoped =
-          seller != null || to != null || totalText != null || wordsText != null || bankText != null;
+          seller != null || to != null || wordsText != null || bankText != null || freightRaw != null;
 
         const legacySeller = !hasAnyScoped && scope !== "global" ? localStorage.getItem(this.getInvoiceLegacyKey("seller")) : null;
         const legacyTo = !hasAnyScoped && scope !== "global" ? localStorage.getItem(this.getInvoiceLegacyKey("to")) : null;
-        const legacyTotalText = !hasAnyScoped && scope !== "global" ? localStorage.getItem(this.getInvoiceLegacyKey("totalText")) : null;
         const legacyWordsText = !hasAnyScoped && scope !== "global" ? localStorage.getItem(this.getInvoiceLegacyKey("wordsText")) : null;
         const legacyBankText = !hasAnyScoped && scope !== "global" ? localStorage.getItem(this.getInvoiceLegacyKey("bankText")) : null;
+        const legacyFreight = !hasAnyScoped && scope !== "global" ? localStorage.getItem(this.getInvoiceLegacyKey("freight")) : null;
 
         this.invoiceSeller = "";
         this.invoiceTo = "";
@@ -934,9 +1030,14 @@ export default {
 
         this.invoiceSeller = seller != null ? seller : legacySeller != null ? legacySeller : "";
         this.invoiceTo = to != null ? to : legacyTo != null ? legacyTo : "";
-        this.invoiceTotalText = totalText != null ? totalText : legacyTotalText != null ? legacyTotalText : "";
         this.invoiceWordsText = wordsText != null ? wordsText : legacyWordsText != null ? legacyWordsText : "";
         this.invoiceBankText = bankText != null ? bankText : legacyBankText != null ? legacyBankText : "";
+
+        const freightStr = freightRaw != null ? freightRaw : legacyFreight != null ? legacyFreight : null;
+        if (freightStr != null) {
+          const freightNum = Number(String(freightStr).replace(/,/g, ""));
+          if (Number.isFinite(freightNum)) this.freightManual = freightNum;
+        }
 
         if (!hasAnyScoped && scope !== "global") this.persistInvoiceDraftDebounced();
       } catch (e) {
@@ -954,6 +1055,7 @@ export default {
         localStorage.setItem(this.getInvoiceKey("totalText"), this.invoiceTotalText || "");
         localStorage.setItem(this.getInvoiceKey("wordsText"), this.invoiceWordsText || "");
         localStorage.setItem(this.getInvoiceKey("bankText"), this.invoiceBankText || "");
+        localStorage.setItem(this.getInvoiceKey("freight"), String(this.freightManual != null ? this.freightManual : ""));
       } catch (e) {}
     },
     persistInvoiceDraftDebounced() {
@@ -961,6 +1063,17 @@ export default {
       this.invoiceSaveTimer = setTimeout(() => {
         this.persistInvoiceDraft();
       }, 200);
+    },
+    persistFreightDebounced() {
+      try {
+        localStorage.setItem(this.getInvoiceKey("freight"), String(this.freightManual != null ? this.freightManual : ""));
+      } catch (e) {}
+    },
+    refreshInvoiceTotalIfNeeded() {
+      if (this.headerMode === "invoice") {
+        this.invoiceTotalText = this.getDefaultInvoiceTotalText();
+        this.persistInvoiceDraftDebounced();
+      }
     },
     getDefaultInvoiceSeller() {
       return [
@@ -1002,10 +1115,9 @@ export default {
       const to = String(this.invoiceTo || "").trim();
       if (!seller) this.invoiceSeller = this.getDefaultInvoiceSeller();
       if (!to) this.invoiceTo = this.getDefaultInvoiceTo();
-      const totalText = String(this.invoiceTotalText || "").trim();
       const wordsText = String(this.invoiceWordsText || "").trim();
       const bankText = String(this.invoiceBankText || "").trim();
-      if (!totalText) this.invoiceTotalText = this.getDefaultInvoiceTotalText();
+      this.invoiceTotalText = this.getDefaultInvoiceTotalText();
       if (!wordsText) this.invoiceWordsText = this.getDefaultInvoiceWordsText();
       if (!bankText) this.invoiceBankText = this.getDefaultInvoiceBankText();
       this.persistInvoiceDraftDebounced();
@@ -1098,6 +1210,13 @@ export default {
       .pdfPreviewBody{ padding: 12px; }
       .pdfPreviewBody .invoiceInput{ display:none !important; }
       .pdfPreviewBody .invoicePrintText{ display:block !important; }
+      .pdfPreviewBody .freightInputScreen{ display:none !important; }
+      .pdfPreviewBody .freightStaticPrint{ display:inline-block !important; }
+      .pdfPreviewBody .depositInputScreen{ display:none !important; }
+      .pdfPreviewBody .depositStaticPrint{ display:inline-block !important; }
+      .pdfPreviewBody .exchangeRateInputScreen,
+      .pdfPreviewBody .exchangeRatePrefixScreen{ display:none !important; }
+      .pdfPreviewBody .exchangeRateStaticPrint{ display:inline-block !important; }
 
       @media print {
         @page { size: A4; margin: 10mm; }
@@ -1360,10 +1479,38 @@ export default {
     freightManualBlur() {
       const n = Number(String(this.freightManual).replace(/,/g, ""));
       this.freightManual = Number.isFinite(n) ? n : 30;
+      this.persistFreightDebounced();
+      this.refreshInvoiceTotalIfNeeded();
     },
     depositManualBlur() {
       const n = Number(String(this.depositManual).replace(/,/g, ""));
       this.depositManual = Number.isFinite(n) ? n : 0;
+    },
+    onExchangeRateInput(v) {
+      this.exchangeRateManual = v == null ? "" : String(v);
+    },
+    selectExchangeRateText(e) {
+      try {
+        const t = e && e.target;
+        if (t && typeof t.select === "function") t.select();
+      } catch (err) {}
+    },
+    commitExchangeRateFromEnter() {
+      this.exchangeRateManualBlur();
+      try {
+        const el = document.activeElement;
+        if (el && el.blur) el.blur();
+      } catch (err) {}
+    },
+    exchangeRateManualBlur() {
+      const raw = this.exchangeRateManual;
+      const n = this.parseExchangeRate(raw);
+      if (n != null) {
+        this.exchangeRate = n;
+        this.exchangeRateManual = Number(n).toFixed(2);
+      } else {
+        this.exchangeRateManual = Number(this.exchangeRate).toFixed(2);
+      }
     },
     load() {
       if (!this.source) return;
@@ -1374,7 +1521,8 @@ export default {
             number: cls.number || "",
             time: this.formatDate(cls.time || ""),
             arrival: this.formatDate(cls.arrival || ""),
-            data: cls.data || ""
+            data: cls.data || "",
+            user: cls.user || ""
           };
           this.loadInvoiceDraft();
           this.detailRows = Array.isArray(result.info.info) ? result.info.info : [];
@@ -1393,11 +1541,77 @@ export default {
               }
               return this.fetchCustomerInfo(customerId);
             });
+          const sellerIdRaw = this.classData.user || (cls.userData && (cls.userData.id || cls.userData.key)) || "";
+          const sellerId = Number(sellerIdRaw);
+          if (Number.isFinite(sellerId) && sellerId > 0) {
+            this.fetchSellerInfo(sellerId);
+          } else {
+            this.resetSellerInfoToDefaults();
+          }
         } else if (result.state == "error") {
           this.$message({ type: "warning", message: result.info });
         } else {
           this.$message({ type: "error", message: "[ ERROR ] 服务器响应超时!" });
         }
+      });
+    },
+    resetSellerInfoToDefaults() {
+      const base = this.$options.data().sellerInfo;
+      this.sellerInfo = this.$lib.extend(true, {}, base || {});
+      this.sellerInfoLoaded = true;
+      this.applySellerExchangeRate();
+    },
+    parseExchangeRate(v) {
+      if (v === undefined || v === null) return null;
+      const s = String(v).trim();
+      if (!s) return null;
+      const n = Number(s);
+      if (!Number.isFinite(n) || !(n > 0)) return null;
+      return n;
+    },
+    getSellerExchangeRate() {
+      const def = 6.85;
+      const raw = this.sellerInfo && this.sellerInfo.exchangeRate != null ? this.sellerInfo.exchangeRate : "";
+      const n = this.parseExchangeRate(raw);
+      return n != null ? n : def;
+    },
+    applySellerExchangeRate() {
+      const r = this.getSellerExchangeRate();
+      this.exchangeRate = r;
+      this.exchangeRateManual = Number(r).toFixed(2);
+    },
+    fetchSellerInfo(userId) {
+      if (!userId) {
+        this.resetSellerInfoToDefaults();
+        return;
+      }
+      this.$axios.post("user/get", { id: userId }).then(result => {
+        if (result.state === "success" && result.info) {
+          const info = result.info || {};
+          const rawMore = info.more && typeof info.more === "object" && info.more !== null ? info.more : {};
+          const defaults = this.$options.data().sellerInfo || {};
+          const more = {
+            companyEn: rawMore.companyEn || defaults.companyEn || "",
+            companyCn: rawMore.companyCn || defaults.companyCn || "",
+            addressCn: rawMore.addressCn || defaults.addressCn || "",
+            addressEn: rawMore.addressEn || defaults.addressEn || "",
+            email: rawMore.email || defaults.email || "",
+            whatsapp: rawMore.whatsapp || defaults.whatsapp || "",
+            contactName: rawMore.contactName || defaults.contactName || "",
+            wechatQr: rawMore.wechatQr || defaults.wechatQr || "",
+            whatsappQr: rawMore.whatsappQr || defaults.whatsappQr || "",
+            exchangeRate: rawMore.exchangeRate != null ? String(rawMore.exchangeRate) : defaults.exchangeRate || ""
+          };
+          this.sellerInfo = Object.assign({}, defaults, more, {
+            tel: info.tel || (more && more.whatsapp) || defaults.tel || ""
+          });
+          this.sellerInfoLoaded = true;
+          this.applySellerExchangeRate();
+        } else {
+          this.resetSellerInfoToDefaults();
+        }
+      }).catch(() => {
+        this.resetSellerInfoToDefaults();
       });
     },
     getCategoryName(id) {
@@ -1634,6 +1848,29 @@ export default {
   width: 76px;
   height: 76px;
   border: 1px solid #333;
+}
+.qrPlaceholder {
+  width: 76px;
+  height: 76px;
+  border: 1px solid #333;
+  box-sizing: border-box;
+  margin: 0 auto;
+  background: #fff;
+}
+.qrImgBox {
+  width: 76px;
+  height: 76px;
+  border: 1px solid #333;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 2px;
+  background: #fff;
+}
+.qrImg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 .qrLabel {
   font-size: 12px;
@@ -1971,6 +2208,68 @@ export default {
   border-radius: 0;
   box-shadow: none;
   background: transparent;
+}
+.exchangeRateCell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
+  flex-wrap: nowrap;
+}
+.exchangeRatePrefix {
+  color: inherit;
+  font-weight: inherit;
+  white-space: nowrap;
+}
+.exchangeRateStaticPrint {
+  display: none;
+  white-space: nowrap;
+  color: inherit;
+  font-weight: inherit;
+}
+.exchangeRateInput {
+  width: 58px;
+}
+.exchangeRateInput >>> .el-input__inner {
+  text-align: left;
+  padding: 0 2px;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  color: inherit;
+  font-weight: inherit;
+  font-size: inherit;
+  font-family: inherit;
+  height: 22px;
+  line-height: 22px;
+}
+.exchangeRateInput >>> .el-input__inner:focus {
+  border: 1px solid #dcdfe6;
+  border-radius: 3px;
+  background: #fff;
+  padding: 0 6px;
+}
+@media print {
+  .exchangeRateInputScreen,
+  .exchangeRatePrefixScreen {
+    display: none !important;
+  }
+  .exchangeRateStaticPrint {
+    display: inline-block !important;
+  }
+  .freightInputScreen,
+  .depositInputScreen {
+    display: none !important;
+  }
+  .freightStaticPrint,
+  .depositStaticPrint {
+    display: inline-block !important;
+  }
+}
+.freightStaticPrint,
+.depositStaticPrint {
+  display: none;
 }
 .depositInput {
   width: 100%;

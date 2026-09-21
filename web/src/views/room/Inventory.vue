@@ -31,6 +31,9 @@
 					<el-form-item>
 						<el-input placeholder="请输入商品备注" v-model="searchFrom.data" clearable></el-input>
 					</el-form-item>
+					<el-form-item>
+						<el-input placeholder="库存数量范围 如:10 或 50-100" v-model="searchFrom.stockRange" clearable></el-input>
+					</el-form-item>
 					<el-divider></el-divider>
 					<el-button class="searchBtn" icon="el-icon-search" @click="record(1)" ></el-button>
 				</el-form>
@@ -152,7 +155,8 @@
 					brand:"",
 					code:"",
 					warehouse:[],
-					data:''
+					data:'',
+					stockRange:''
 				},
 				tableData: [],
 				tableColumn:[],

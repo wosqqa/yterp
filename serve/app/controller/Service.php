@@ -809,18 +809,17 @@ class Service extends Acl {
                 $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(16);
                 $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
 
-                $merge(2,1,2,6)->setValue('地址：湖南省邵东市国际商贸城東二区二楼207#783号');
-                $merge(3,1,3,6)->setValue('ADD：No. 783, 207 Gallery, Second Floor, East Second District, Shaodong International Business City, Shaodong City, Hunan Province');
-                $merge(4,1,4,6)->setValue('EMAIL：kimbagfactory@outlook.com');
-                $merge(5,1,5,6)->setValue('MOB & WhatsApp：+8619535838073 Kim');
-                $sheet->getStyle('A5')->getFont()->getColor()->setARGB('FFD40000');
-                $sheet->getStyle('A5')->getFont()->setBold(true);
-                for($r=2;$r<=5;$r++){
+                $merge(2,1,2,6)->setValue('ADD：No. 783, 207 Gallery, Second Floor, East Second District, Shaodong International Business City, Shaodong City, Hunan Province');
+                $merge(3,1,3,6)->setValue('EMAIL：kimbagfactory@outlook.com');
+                $merge(4,1,4,6)->setValue('MOB & WhatsApp：+8619535838073 Kim');
+                $sheet->getStyle('A4')->getFont()->getColor()->setARGB('FFD40000');
+                $sheet->getStyle('A4')->getFont()->setBold(true);
+                for($r=2;$r<=4;$r++){
                     $sheet->getRowDimension($r)->setRowHeight(18);
                     $sheet->getStyle('A'.$r)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
                     $sheet->getStyle('A'.$r)->getFont()->setSize(11);
                 }
-                $merge(2,7,5,12)->setValue('WeChat / WhatsApp');
+                $merge(2,7,4,12)->setValue('WeChat / WhatsApp');
                 $sheet->getStyle('G2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
 
                 $metaStart=6;
@@ -844,7 +843,7 @@ class Service extends Acl {
                 $setCell($tableHeaderRow,7,'TT QTY');
                 $setCell($tableHeaderRow,8,'U/PRICE');
                 $setCell($tableHeaderRow,9,'AMOUNT');
-                $setCell($tableHeaderRow,10,$exchangeRate?("USD Price\n1USD=".$exchangeRate."RMB"):'USD Price');
+                $setCell($tableHeaderRow,10,$exchangeRate?("USD Price\n\$1=￥".number_format($exchangeRate,2,'.','')):'USD Price');
                 $setCell($tableHeaderRow,11,"KG");
                 $setCell($tableHeaderRow,12,"CBM");
                 $sheet->getRowDimension($tableHeaderRow)->setRowHeight(34);
@@ -982,7 +981,7 @@ class Service extends Acl {
                     ]);
                 }
                 $sheet->getStyle('I'.($sumStart+1))->getFont()->getColor()->setARGB('FFD40000');
-                $merge($sumStart,10,$sumStart+2,10)->setValue($exchangeRate?('1USD='.$exchangeRate.'RMB'):'');
+                $merge($sumStart,10,$sumStart+2,10)->setValue($exchangeRate?("\$1=￥".number_format($exchangeRate,2,'.','')):'');
                 $sheet->getStyle('J'.$sumStart)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
                 $sheet->getStyle('J'.$sumStart)->getFont()->setSize(10)->getColor()->setARGB('FF909399');
             }else{

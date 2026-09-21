@@ -51,7 +51,7 @@
 		<el-pagination class="tablePagination" :current-page.sync="page.current" :total="page.total" :page-size.sync="page.size"
 		 :page-sizes="page.sizes" :pager-count="page.count" @size-change="record(1)" @current-change="record(0)" layout="prev,pager,next,jumper,sizes,total">
 		</el-pagination>
-		<el-dialog :visible.sync="dialog" title="详情" width="420px" v-madeDialog>
+		<el-dialog :visible.sync="dialog" title="详情" width="720px" v-madeDialog>
 			<transition name="el-fade-in">
 				<template v-if="dialog">
 					<el-form :model="form" :rules="rules" ref="form" label-width="80px" >
@@ -88,6 +88,76 @@
 							</el-upload>
 						</el-form-item>
 						<FieldForm v-model="form.more" rule="user" prefix="more."></FieldForm>
+						<el-divider content-position="left">公司信息</el-divider>
+						<div class="companyInfoBlock">
+							<div class="companyRow">
+								<el-form-item label="公司中文名" label-width="100px" prop="more.companyCn" class="companyFormItem">
+									<el-input placeholder="例：希悦箱包" v-model="form.more.companyCn"></el-input>
+								</el-form-item>
+								<el-form-item label="公司英文名" label-width="100px" prop="more.companyEn" class="companyFormItem">
+									<el-input placeholder="例：Kim Bags" v-model="form.more.companyEn"></el-input>
+								</el-form-item>
+							</div>
+							<el-form-item label="中文地址" label-width="100px" prop="more.addressCn">
+								<el-input type="textarea" :rows="2" placeholder="请输入公司中文地址" v-model="form.more.addressCn"></el-input>
+							</el-form-item>
+							<el-form-item label="英文地址" label-width="100px" prop="more.addressEn">
+								<el-input type="textarea" :rows="2" placeholder="Please input company address in English" v-model="form.more.addressEn"></el-input>
+							</el-form-item>
+							<div class="companyRow">
+								<el-form-item label="邮箱" label-width="100px" prop="more.email" class="companyFormItem">
+									<el-input placeholder="company email" v-model="form.more.email"></el-input>
+								</el-form-item>
+								<el-form-item label="WhatsApp" label-width="100px" prop="more.whatsapp" class="companyFormItem">
+									<el-input placeholder="WhatsApp号码，含国家区号" v-model="form.more.whatsapp"></el-input>
+								</el-form-item>
+							</div>
+							<div class="companyRow">
+								<el-form-item label="联系电话" label-width="100px" prop="tel" class="companyFormItem">
+									<el-input placeholder="联系电话（复用手机号）" v-model="form.tel"></el-input>
+								</el-form-item>
+								<el-form-item label="联系人" label-width="100px" prop="more.contactName" class="companyFormItem">
+									<el-input placeholder="打印在手机/WhatsApp后面的联系人，例：Kim" v-model="form.more.contactName"></el-input>
+								</el-form-item>
+							</div>
+							<div class="companyRow">
+								<el-form-item label="汇率" label-width="100px" prop="more.exchangeRate" class="companyFormItem">
+									<el-input placeholder="USD/CNY 汇率，例：6.85（空则默认6.85）" v-model="form.more.exchangeRate"></el-input>
+								</el-form-item>
+							</div>
+							<div class="qrRow">
+								<div class="qrItem">
+									<div class="qrLabel">微信二维码</div>
+									<el-upload
+										class="avatar-uploader qrUploader"
+										:action="$base.web+'user/upload'"
+										:headers="{Token:$store.state.token}"
+										:show-file-list="false"
+										:on-success="(res, f, list) => onQrUploadSuccess('wechatQr', res, f, list)"
+									>
+										<el-tooltip v-if="form.more.wechatQr" content="右键删除图片">
+											<img class="qrImg" :src="form.more.wechatQr" @click.right.prevent="form.more.wechatQr=''">
+										</el-tooltip>
+										<i v-else class="el-icon-plus qr-uploader-icon"></i>
+									</el-upload>
+								</div>
+								<div class="qrItem">
+									<div class="qrLabel">WhatsApp二维码</div>
+									<el-upload
+										class="avatar-uploader qrUploader"
+										:action="$base.web+'user/upload'"
+										:headers="{Token:$store.state.token}"
+										:show-file-list="false"
+										:on-success="(res, f, list) => onQrUploadSuccess('whatsappQr', res, f, list)"
+									>
+										<el-tooltip v-if="form.more.whatsappQr" content="右键删除图片">
+											<img class="qrImg" :src="form.more.whatsappQr" @click.right.prevent="form.more.whatsappQr=''">
+										</el-tooltip>
+										<i v-else class="el-icon-plus qr-uploader-icon"></i>
+									</el-upload>
+								</div>
+							</div>
+						</div>
 						<el-form-item label="备注信息">
 							<el-input placeholder="请输入备注信息" v-model="form.data"></el-input>
 						</el-form-item>
@@ -141,7 +211,18 @@
 					pwd: "",
 					img: "",
 					data: "",
-					more: {}
+					more: {
+						companyCn:"",
+						companyEn:"",
+						addressCn:"",
+						addressEn:"",
+						email:"",
+						whatsapp:"",
+						contactName:"",
+						wechatQr:"",
+						whatsappQr:"",
+						exchangeRate:""
+					}
 				},
 				rules: {
 					name: {
@@ -236,6 +317,9 @@
 					}).then(result => {
 						if (result.state == "success") {
 							result.info.pwd = "";
+							const baseMore = (this.$options.data().form && this.$options.data().form.more) ? this.$lib.extend(true,{},this.$options.data().form.more) : {};
+							const infoMore = (result.info && result.info.more && typeof result.info.more === "object" && result.info.more !== null) ? result.info.more : {};
+							result.info.more = Object.assign({}, baseMore, infoMore);
 							this.form = result.info;
 							this.dialog = true; //显示弹层
 						} else if (result.state == "error") {
@@ -264,6 +348,21 @@
 								message: "用户密码不可为空!"
 							});
 							return false;
+						}
+						const rateRaw = (this.form && this.form.more && this.form.more.exchangeRate != null) ? String(this.form.more.exchangeRate).trim() : "";
+						if (rateRaw !== "") {
+							const num = Number(rateRaw);
+							if (!isFinite(num) || !(num > 0)) {
+								this.$message({type: "warning",message: "汇率必须是大于0的数字，或留空使用默认值!"});
+								return false;
+							}
+							if (num < 0.0001 || num > 9999.9999) {
+								this.$message({type: "warning",message: "汇率超出允许范围(0.0001~9999.9999)!"});
+								return false;
+							}
+							this.$set(this.form.more, "exchangeRate", String(num));
+						} else {
+							this.$set(this.form.more, "exchangeRate", "");
 						}
 						this.$axios.post("user/save", this.form).then(result => {
 							if (result.state == "success") {
@@ -335,6 +434,23 @@
 					});
 				}
 			},
+			//二维码上传成功
+			onQrUploadSuccess(field, result, file, fileList) {
+				if (result.state == 'success') {
+					this.$set(this.form.more, field, result.info);
+				} else if (result.state == "error") {
+					fileList && fileList.splice && fileList.splice(fileList.findIndex(obj => obj.uid == file.uid), 1);
+					this.$message({
+						type: "warning",
+						message: "[ " + file.name + " ]" + result.info
+					});
+				} else {
+					this.$message({
+						type: "error",
+						message: "[ ERROR ] 服务器响应超时!"
+					});
+				}
+			},
 			//页面刷新
 			reload() {
 				this.$bus.emit('homeReload',this.$options.name);
@@ -373,5 +489,49 @@
 		height: 100px;
 		line-height: 100px;
 		text-align: center;
+	}
+	.companyInfoBlock {
+		padding: 0 2px 8px 2px;
+	}
+	.companyRow {
+		display: flex;
+		gap: 16px;
+	}
+	.companyFormItem {
+		flex: 1 1 0;
+		min-width: 0;
+	}
+	.qrRow {
+		display: flex;
+		gap: 28px;
+		flex-wrap: wrap;
+	}
+	.qrItem {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 8px;
+	}
+	.qrLabel {
+		font-size: 13px;
+		color: #606266;
+	}
+	.qrUploader >>> .el-upload,
+	.qr-uploader-icon {
+		width: 120px;
+		height: 120px;
+		line-height: 120px;
+		text-align: center;
+	}
+	.qrImg {
+		width: 120px;
+		height: 120px;
+		object-fit: contain;
+		display: block;
+		border: 1px solid #ebeef5;
+		border-radius: 4px;
+		padding: 4px;
+		box-sizing: border-box;
+		background: #fff;
 	}
 </style>

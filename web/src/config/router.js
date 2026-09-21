@@ -101,6 +101,8 @@ const Goods = () =>
   import(/* webpackChunkName: 'n'*/ "@/views/system/base/Goods");
 const GoodsQuote = () =>
   import(/* webpackChunkName: 'n'*/ "@/views/system/base/GoodsQuote");
+const CustomerReport = () =>
+  import(/* webpackChunkName: 'n'*/ "@/views/system/base/CustomerReport");
 //辅助资料
 const Category = () =>
   import(/* webpackChunkName: 'o'*/ "@/views/system/assist/Category");
@@ -138,6 +140,10 @@ const Field = () => import(/* webpackChunkName: 'q'*/ "@/views/develop/Field");
 //404
 const NotFound = () =>
   import(/* webpackChunkName: 'r'*/ "@/views/main/NotFound");
+
+//公共页面-无需登录
+const SorPublic = () =>
+  import(/* webpackChunkName: 'public'*/ "@/views/sale/SorPublic");
 
 Vue.use(Router);
 const example = new Router({
@@ -735,6 +741,14 @@ const example = new Router({
           },
         },
         {
+          path: "customerReport",
+          name: "customerReport",
+          component: CustomerReport,
+          meta: {
+            title: "客户数据报表",
+          },
+        },
+        {
           path: "category",
           name: "category",
           component: Category,
@@ -869,6 +883,22 @@ const example = new Router({
           },
         },
       ],
+    },
+    {
+      path: "/public/sor",
+      name: "sorPublic",
+      component: SorPublic,
+      meta: {
+        title: "销售订单明细",
+      },
+    },
+    {
+      path: "/public/sor/:orderId",
+      name: "sorPublicWithId",
+      component: SorPublic,
+      meta: {
+        title: "销售订单明细",
+      },
     },
     {
       path: "*",

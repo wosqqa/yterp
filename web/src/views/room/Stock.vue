@@ -35,6 +35,9 @@
 							<el-option label="预警库存" :value="2"></el-option>
 						</el-select>
 					</el-form-item>
+					<el-form-item>
+						<el-input placeholder="库存数量范围 如:10 或 50-100" v-model="searchFrom.stockRange" clearable></el-input>
+					</el-form-item>
 					<el-divider></el-divider>
 					<el-button class="searchBtn" icon="el-icon-search" @click="record(1)" ></el-button>
 				</el-form>
@@ -155,7 +158,8 @@
 					brand:"",
 					code:"",
 					warehouse:[],
-					state:0
+					state:0,
+					stockRange:''
 				},
 				tableData: [],
 				tableColumn:[],

@@ -3,12 +3,14 @@
     <el-dialog
       :visible.sync="dialog"
       title="库存详情"
-      width="800px"
+      width="70%"
+      custom-class="stockDetailDialog"
       @closed="close"
       :append-to-body="true"
       v-madeDialog
     >
-      <el-table :data="tableData" height="320px" border v-madeTable>
+      <div class="stockDetailBody">
+        <el-table :data="tableData" height="100%" border ref="detailTable" v-madeTable>
         <el-table-column
           prop="sourceData.frameData.name"
           label="所属组织"
@@ -58,6 +60,7 @@
         layout="prev,pager,next,jumper,sizes,total"
       >
       </el-pagination>
+      </div>
       <span slot="footer" class="dialog-footer">
         <el-popover
           ref="searchPopover"
@@ -150,6 +153,13 @@ export default {
   created() {
     this.record();
   },
+  mounted() {
+    this.$nextTick(() => this.doLayout());
+    window.addEventListener("resize", this.doLayout);
+  },
+  beforeDestroy() {
+    window.removeEventListener("resize", this.doLayout);
+  },
   computed: {
     //读取数据中心
     store() {
@@ -157,6 +167,14 @@ export default {
     },
   },
   methods: {
+    //表格自适应布局
+    doLayout() {
+      this.$nextTick(() => {
+        try {
+          this.$refs.detailTable && this.$refs.detailTable.doLayout && this.$refs.detailTable.doLayout();
+        } catch (e) {}
+      });
+    },
     //获取数据
     record() {
       let parm = Object.assign(
@@ -172,6 +190,7 @@ export default {
           this.tableData = result.info;
           this.page.total = result.count;
           this.$refs["searchPopover"].showPopper = false;
+          this.doLayout();
         } else if (result.state == "error") {
           this.$message({
             type: "warning",
@@ -210,5 +229,56 @@ export default {
 /* 操作按钮浮动 */
 .dialog-footer > span {
   float: left;
+}
+.stockDetailBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.stockDetailBody .tablePagination {
+  margin-top: 10px;
+  padding: 4px 2px 0 2px;
+}
+</style>
+
+<style>
+/*
+ * 以下为全局样式（不 scoped）：
+ * 本组件 el-dialog 开启了 append-to-body，会被挂到 document.body，
+ * scoped 样式无法覆盖，所以必须用全局 class 控制尺寸。
+ */
+.stockDetailDialog {
+  width: 70% !important;
+  min-width: 640px;
+  max-width: 96%;
+  height: 60vh;
+  min-height: 380px;
+  max-height: 96vh;
+  display: flex;
+  flex-direction: column;
+  margin-top: 10vh !important;
+  margin-bottom: 10vh !important;
+  box-sizing: border-box;
+}
+.stockDetailDialog .el-dialog__header {
+  flex: 0 0 auto;
+  padding: 12px 20px 10px 20px;
+  margin-right: 0;
+  border-bottom: 1px solid #ebeef5;
+}
+.stockDetailDialog .el-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 20px 10px 20px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.stockDetailDialog .el-dialog__footer {
+  flex: 0 0 auto;
+  padding: 8px 20px 14px 20px;
+  border-top: 1px solid #ebeef5;
 }
 </style>

@@ -34,6 +34,9 @@
           v-model="form.number"
           clearable
         ></el-input>
+        <el-button size="mini" style="margin-left: 8px" @click="sortGridByCategory">
+          分类排序
+        </el-button>
       </el-form-item>
       <el-divider class="fistDivider"></el-divider>
       <ag-grid-vue
@@ -256,7 +259,7 @@ export default {
         people: null,
         logistics: { key: "auto", name: "自动识别", number: "" },
         file: [],
-        data: goods.data != null ? String(goods.data) : "",
+        data: "",
         examine: 0,
         check: 0,
         more: {},
@@ -648,12 +651,24 @@ export default {
       const priceType = "buy";
       const unitData = Array.isArray(goods.units) ? goods.units : [];
       const unitVal = goods.unit == null ? "" : goods.unit;
+      const categoryId =
+        goods.category != null
+          ? Number(goods.category)
+          : goods.categoryData && goods.categoryData.id != null
+          ? Number(goods.categoryData.id)
+          : 0;
+      const categoryName =
+        goods.categoryData && goods.categoryData.name != null
+          ? String(goods.categoryData.name)
+          : "";
       return {
         uniqid: this.$lib.getUniqid(),
         source: 0,
         key: goods.id,
         goodsType: goods.type,
         imgs: goods.imgs,
+        categoryId,
+        categoryName,
         unitData,
         unitRelation: {
           valence: goods[priceType],
@@ -702,6 +717,8 @@ export default {
           number: r.number,
           spec: r.spec,
           type: r.goodsType,
+          category: r.categoryId,
+          categoryData: r.categoryId ? { id: r.categoryId, name: r.categoryName } : null,
           data: r.data,
           unit: unitData.length > 0 ? "-1" : r.unit,
           units: unitData,
@@ -758,6 +775,49 @@ export default {
       api.setRowData(next);
       this.$grid.addGridRow(this.grid.options);
       this.handleGrid();
+    },
+    sortGridByCategory() {
+      const api = this.grid && this.grid.options ? this.grid.options.api : null;
+      if (!api) return;
+      api.stopEditing && api.stopEditing();
+      const rows = this.$grid
+        .getGridData(this.grid.options)
+        .filter((r) => r && r.key != null);
+      if (rows.length <= 1) return;
+      const textCmp = (a, b) => {
+        const sa = a == null ? "" : String(a).trim();
+        const sb = b == null ? "" : String(b).trim();
+        return sa.localeCompare(sb, undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
+      };
+      const numCmp = (a, b) => {
+        const na = Number(a);
+        const nb = Number(b);
+        const va = Number.isFinite(na) ? na : 0;
+        const vb = Number.isFinite(nb) ? nb : 0;
+        return va - vb;
+      };
+      const sorted = rows.slice().sort((a, b) => {
+        const ca = a && a.categoryId != null ? Number(a.categoryId) : 0;
+        const cb = b && b.categoryId != null ? Number(b.categoryId) : 0;
+        if (!ca && cb) return 1;
+        if (ca && !cb) return -1;
+        if (ca && cb) {
+          const c = numCmp(ca, cb);
+          if (c !== 0) return c;
+        }
+        const c2 = textCmp(a && a.categoryName, b && b.categoryName);
+        if (c2 !== 0) return c2;
+        const c3 = textCmp(a && a.number, b && b.number);
+        if (c3 !== 0) return c3;
+        return textCmp(a && a.uniqid, b && b.uniqid);
+      });
+      api.setRowData(sorted);
+      this.$grid.addGridRow(this.grid.options);
+      this.handleGrid();
+      this.goodsViewValue = this.getGoodsViewSelected();
     },
     //初始化
     init() {
@@ -1085,12 +1145,24 @@ export default {
       let priceType = "buy";
       for (let item of items) {
         let goods = scene ? item : item.goodsData;
+        const categoryId =
+          goods && goods.category != null
+            ? Number(goods.category)
+            : goods && goods.categoryData && goods.categoryData.id != null
+            ? Number(goods.categoryData.id)
+            : 0;
+        const categoryName =
+          goods && goods.categoryData && goods.categoryData.name != null
+            ? String(goods.categoryData.name)
+            : "";
         let row = {
           uniqid: this.$lib.getUniqid(),
           source: item.hasOwnProperty("source") ? item.source : 0,
           key: goods.id,
           goodsType: goods.type,
           imgs: goods.imgs,
+          categoryId,
+          categoryName,
           unitData: Array.isArray(goods.units) ? goods.units : [],
           unitRelation: {
             valence: goods[priceType],

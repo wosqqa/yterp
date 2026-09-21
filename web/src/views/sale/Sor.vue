@@ -47,6 +47,7 @@
           <el-radio-button label="warehouse">仓库排序</el-radio-button>
           <el-radio-button label="category">分类排序</el-radio-button>
           <el-radio-button label="packing">装箱排序</el-radio-button>
+          <el-radio-button label="combo">组合排序</el-radio-button>
         </el-radio-group>
       </el-form-item>
       <el-divider class="fistDivider"></el-divider>
@@ -722,6 +723,26 @@ export default {
           if (sa && !sb) return -1;
           const c = textCmp(sa, sb);
           return c !== 0 ? c : numberTie(a, b);
+        }
+        if (nextMode === "combo") {
+          const wa = a && a.warehouseId != null ? Number(a.warehouseId) : null;
+          const wb = b && b.warehouseId != null ? Number(b.warehouseId) : null;
+          if (wa == null && wb != null) return 1;
+          if (wa != null && wb == null) return -1;
+          if (wa != null && wb != null) {
+            const c = numCmp(wa, wb);
+            if (c !== 0) return c;
+          }
+          const ca = a && a.categoryId != null ? Number(a.categoryId) : 0;
+          const cb = b && b.categoryId != null ? Number(b.categoryId) : 0;
+          if (!ca && cb) return 1;
+          if (ca && !cb) return -1;
+          if (ca && cb) {
+            const c = numCmp(ca, cb);
+            if (c !== 0) return c;
+          }
+          const c2 = textCmp(a && a.categoryName, b && b.categoryName);
+          return c2 !== 0 ? c2 : numberTie(a, b);
         }
         return numberTie(a, b);
       });

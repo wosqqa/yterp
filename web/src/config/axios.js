@@ -2,13 +2,44 @@ import Vue from "vue";
 import axios from "axios";
 import {Loading} from "element-ui";
 import store from "@/config/store";
+import {getApiBase} from "@/config/base";
 
 let load; //初始弹层状态
-axios.defaults.baseURL = Vue.prototype.$base.web; //通用跨域配置
+
+function buildDebugUrl(config) {
+	let base = "";
+	let path = "";
+	try { base = (config && (config.baseURL || axios.defaults.baseURL)) || ""; } catch(e){}
+	try { path = (config && config.url) || ""; } catch(e){}
+	base = String(base || "");
+	path = String(path || "");
+	if (base && !base.endsWith("/") && path) base = base + "/";
+	if (path.startsWith("/")) path = path.slice(1);
+	return base + path;
+}
+
+function appendDebugInfo(rawInfo, errorOrConfig, debugUrl) {
+	try {
+		const loc = (typeof window !== "undefined" && window.location && window.location.href) ? window.location.href : "";
+		const base = (typeof getApiBase === "function") ? (getApiBase() || "") : "";
+		const reqUrl = debugUrl || buildDebugUrl(errorOrConfig && errorOrConfig.config ? errorOrConfig.config : errorOrConfig);
+		return rawInfo + "\n\n[ DEBUG ]\n当前页面：" + loc + "\nAPI 基址：" + base + "\n实际请求：" + reqUrl;
+	} catch(e) {
+		return rawInfo;
+	}
+}
+
+axios.defaults.timeout = 30000;
+axios.defaults.baseURL = getApiBase();
 
 //请求开始配置
 axios.interceptors.request.use(config => {
 	config.headers.Token = store.state.token;
+	try {
+		const apiBase = getApiBase();
+		if (apiBase) config.baseURL = apiBase;
+	} catch (e) {}
+	if (!config.timeout) config.timeout = 30000;
 	if (typeof config.url === "string") {
 		config.url = config.url.replace(/^\/+/, "");
 	}
@@ -42,8 +73,24 @@ axios.interceptors.response.use(
 						? (data.info || data.message || data.error || "")
 						: "";
 				info = "[HTTP " + status + "] " + (msg || info);
+			}else if(error){
+				const code = error.code;
+				const msg = (error.message || "").toString();
+				const isTimeout = code === "ECONNABORTED" || /timeout/i.test(msg);
+				const isNetworkError = code === "NETWORK_ERROR" || /Network Error/i.test(msg);
+				if (isTimeout) {
+					info = "[ TIMEOUT ] 请求超时(30s),请检查手机和电脑是否同一Wi-Fi/热点,然后重试";
+				} else if (isNetworkError) {
+					info = "[ NETWORK ERROR ] 无法连接服务器,请确认服务器地址是否正确(" + (getApiBase && getApiBase() || "") + ")";
+				} else {
+					info = "[ NETWORK ERROR ] " + (msg || info);
+				}
+				info = appendDebugInfo(info, error);
 			}
 		}catch(e){}
+		if (info.indexOf('[ DEBUG ]') < 0) {
+			try { info = appendDebugInfo(info, error); } catch(e){}
+		}
 		return { state: "error", info };
 	}
 );

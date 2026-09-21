@@ -265,15 +265,29 @@ function buildExcel($fileName,$data,$down=true){
                     if(is_array($tbodyVal)){
                         if($tbodyVal['type']=='img'){
                             //图像
-                            $drawing=new \PhpOffice\PhpSpreadsheet\Worksheet\Drawing();
-                            $drawing->setPath($tbodyVal['info']);//设置图像路径
-                            $drawing->setOffsetX(22);//设置X偏移距离
-							$drawing->setOffsetY(3);//设置Y偏移距离
-							$drawing->setWidth(100);//设置图像宽度
-							$drawing->setCoordinates($cellName[$cellNums].$rowNums)->setWorksheet($shell);//设置内容
-							$imgInfo=getimagesize($tbodyVal['info']);//读取图像信息
-							$ImgHeight=($imgInfo[1]/($imgInfo[0]/100))*0.75;//计算行高|按照宽度缩放比例缩放
-							$RowHeight=$ImgHeight+4.5;//增加Y偏移1.5倍关系
+                            $imgPath = $tbodyVal['info'] ?? '';
+                            if(is_string($imgPath) && $imgPath !== ''){
+                                $realImgPath = $imgPath;
+                                if(!is_file($realImgPath)){
+                                    if(!preg_match('#^https?://#i', $imgPath)){
+                                        $tryPath = root_path().ltrim($imgPath,'/');
+                                        is_file($tryPath)&&($realImgPath=$tryPath);
+                                    }
+                                }
+                                if(is_file($realImgPath)){
+                                    $drawing=new \PhpOffice\PhpSpreadsheet\Worksheet\Drawing();
+                                    $drawing->setPath($realImgPath);//设置图像路径
+                                    $drawing->setOffsetX(22);//设置X偏移距离
+									$drawing->setOffsetY(3);//设置Y偏移距离
+									$drawing->setWidth(100);//设置图像宽度
+									$drawing->setCoordinates($cellName[$cellNums].$rowNums)->setWorksheet($shell);//设置内容
+									$imgInfo=@getimagesize($realImgPath);//读取图像信息
+                                    if($imgInfo && !empty($imgInfo[0])){
+									    $ImgHeight=($imgInfo[1]/($imgInfo[0]/100))*0.75;//计算行高|按照宽度缩放比例缩放
+									    $RowHeight=$ImgHeight+4.5;//增加Y偏移1.5倍关系
+                                    }
+                                }
+                            }
                         }
                     }else{
                         $shell->setCellValueExplicit($cellName[$cellNums].$rowNums,$tbodyVal,\PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);//设置内容并指定文本格式
