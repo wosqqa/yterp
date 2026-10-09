@@ -1,0 +1,145 @@
+name: Deploy to Production (master)
+
+# 触发条件：master 分支 push (排除只改 md 文件的情况)
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - '**.md'
+      - 'img/**'
+  # 也支持在 Actions 面板手动触发
+  workflow_dispatch:
+
+env:
+  NODE_OPTIONS: --openssl-legacy-provider
+  # PHP 版本 (与服务器 composer.lock 保持一致，防止 vendor 锁版本不一致)
+  PHP_VERSION: '7.4'
+
+jobs:
+  # ========= Job 1: 构建 (不需要审批，先 build 好 tarball) =========
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.assemble.outputs.version }}
+      tarball_artifact: prod-tarball
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js 16
+        uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies (web/)
+        working-directory: web
+        run: npm ci || npm install
+
+      - name: Build frontend Vue2 (web/dist)
+        working-directory: web
+        run: npm run build
+
+      - name: Assemble release bundle
+        id: assemble
+        run: |
+          set -e
+          VERSION="$(date '+%Y%m%d_%H%M%S')_$(echo ${GITHUB_SHA} | cut -c1-7)"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "🚀 [PROD] Build version: $VERSION"
+
+          mkdir -p _release
+          cp -a serve/. _release/
+          cp -a web/dist/. _release/
+
+          rm -rf _release/vendor _release/.env 2>/dev/null || true
+          rm -rf _release/static/upload _release/static/file _release/static/backup 2>/dev/null || true
+
+          tar -czf erp-release.tar.gz -C _release .
+          du -h erp-release.tar.gz
+
+      - name: Upload tarball as artifact (供 deploy job 使用)
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-tarball
+          path: erp-release.tar.gz
+          retention-days: 7
+
+  # ========= Job 2: 部署 (需要 Environment manual approval ⛔ 手动审批闸门) =========
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # 🔒 关键！这里绑定名为 production 的 Environment。
+    #    你需要在 GitHub 仓库 Settings → Environments 新建 production，
+    #    并在 "Required reviewers" 中选择你自己（或团队指定人）。
+    #    没点 Approve 之前整个 deploy job 会一直暂停，**不会执行任何上传/部署动作**！
+    environment:
+      name: production
+      url: ${{ secrets.DEPLOY_HEALTHCHECK_URL }}
+
+    steps:
+      - name: Download tarball artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: prod-tarball
+
+      - name: Confirm artifact ready
+        run: ls -lh erp-release.tar.gz
+
+      - name: Install SSH key (PROD)
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.PROD_DEPLOY_SSH_PRIVATE_KEY }}
+          name: id_rsa
+          known_hosts: unnecessary
+          if_key_exists: fail
+
+      - name: Upload tarball via scp (PROD)
+        run: |
+          set -e
+          TARGET="${{ secrets.PROD_DEPLOY_SSH_USER }}@${{ secrets.PROD_DEPLOY_SSH_HOST }}:/tmp/erp-prod-release.tar.gz"
+          echo "📤 [PROD] Uploading to $TARGET ..."
+          scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -o ConnectTimeout=30 \
+              -P ${{ secrets.PROD_DEPLOY_SSH_PORT }} \
+              erp-release.tar.gz "$TARGET"
+
+      - name: Execute deploy on server (PROD, --env prod)
+        run: |
+          set -e
+          VERSION="${{ needs.build.outputs.version }}"
+          DEPLOY_BASE="/opt/1panel/apps/openresty/openresty/www/sites/erp.51ppy.com/erp-deploy"
+          echo "🖥  [PROD] Deploying $VERSION with --env prod ..."
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -o ConnectTimeout=30 \
+              -p ${{ secrets.PROD_DEPLOY_SSH_PORT }} \
+              ${{ secrets.PROD_DEPLOY_SSH_USER }}@${{ secrets.PROD_DEPLOY_SSH_HOST }} \
+              "bash $DEPLOY_BASE/deploy.sh --env prod --tarball /tmp/erp-prod-release.tar.gz deploy /tmp/erp-prod-release.tar.gz $VERSION"
+
+      - name: Health check (PROD)
+        run: |
+          set -e
+          URL="${{ secrets.PROD_DEPLOY_HEALTHCHECK_URL }}"
+          if [ -z "$URL" ]; then
+            echo "⚠️  未配置 PROD_DEPLOY_HEALTHCHECK_URL，跳过健康检查"
+            exit 0
+          fi
+          echo "🩺  [PROD] Health check: $URL"
+          for i in 1 2 3 4 5; do
+            CODE=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 15 "$URL" || true)
+            echo "   try $i: HTTP $CODE"
+            if [ "$CODE" = "200" ]; then
+              echo "✅ [PROD] Health check OK"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "❌ [PROD] Health check FAILED"
+          echo "   立刻服务器上执行: \$DEPLOY_BASE/deploy.sh --env prod rollback"
+          exit 1

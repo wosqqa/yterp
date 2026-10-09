@@ -36,7 +36,7 @@
       </el-form-item>
       <el-divider class="fistDivider"></el-divider>
       <ag-grid-vue
-        class="ag-theme-balham"
+        :class="['ag-theme-balham', picVisible ? 'ag-pic-mode' : '']"
         :context="grid.context"
         :defaultColDef="grid.coldef"
         :gridOptions="grid.options"
@@ -119,8 +119,12 @@
             (form.examine == 0 && $lib.getUserRoot(store.root, 'entry', 'edit'))
           "
         >
+          <el-button type="info" @click="goodsViewOpen">视图</el-button>
           <el-button type="info" @click="save">保存</el-button>
         </template>
+        <el-button type="info" @click="togglePics">{{
+          picVisible ? "隐藏图片" : "图片"
+        }}</el-button>
         <template v-if="form.id != 0">
           <template v-if="$lib.getUserRoot(store.root, 'entry', 'examine')">
             <el-button type="info" @click="examine">{{
@@ -142,6 +146,13 @@
       :parm="goods.parm"
       @choice="pushGrid"
     ></GoodsList>
+    <GoodsView
+      v-if="goods.viewDialog"
+      @destroy="goodsViewDestroy"
+      :parm="goods.parm"
+      :value="goodsViewValue"
+      @input="goodsViewInput"
+    ></GoodsView>
   </div>
 </template>
 <script>
@@ -165,6 +176,7 @@ import NodUpload from "@/components/lib/NodUpload";
 import Logistics from "@/components/lib/Logistics";
 import FieldForm from "@/components/lib/FieldForm";
 import GoodsList from "@/components/dialog/GoodsList";
+import GoodsView from "@/components/dialog/GoodsView";
 
 export default {
   name: "Entry",
@@ -178,6 +190,7 @@ export default {
     Logistics,
     FieldForm,
     GoodsList,
+    GoodsView,
   },
   props: {
     source: {
@@ -221,6 +234,9 @@ export default {
           onGridReady: () => {
             this.$grid.addGridRow(this.grid.options);
           },
+          getRowHeight: (params) => {
+            return params.context.isPicVisible() ? 80 : 32;
+          },
           onCellEditingStopped: (grid) => {
             grid.context.runHandleGrid();
           },
@@ -233,6 +249,9 @@ export default {
             } else {
               this.handleGrid();
             }
+          },
+          isPicVisible: () => {
+            return this.picVisible;
           },
         },
         coldef: {
@@ -275,6 +294,25 @@ export default {
             cellRenderer: "setter",
             hide: false,
             dispose: false,
+          },
+          {
+            headerName: "图片",
+            width: 90,
+            field: "imgs",
+            hide: true,
+            dispose: false,
+            cellClass: "bill-img-cell",
+            suppressSizeToFit: true,
+            cellRenderer: (params) => {
+              const url = this.getImgUrl(params.data);
+              if (!url) return '<div class="bill-img-cell"></div>';
+              return (
+                '<div class="bill-img-cell">' +
+                '<div class="bill-img-wrap">' +
+                '<img src="' + url + '" />' +
+                "</div></div>"
+              );
+            },
           },
           {
             headerName: "商品名称",
@@ -397,8 +435,13 @@ export default {
       scan: false,
       goods: {
         dialog: false,
+        viewDialog: false,
         parm: {},
       },
+      goodsViewValue: [],
+      goodsViewSyncingFromView: false,
+      goodsViewSyncingFromGrid: false,
+      picVisible: false,
     };
   },
   computed: {
@@ -652,6 +695,7 @@ export default {
           uniqid: this.$lib.getUniqid(),
           key: goods.id,
           goodsType: goods.type,
+          imgs: goods.imgs,
           unitData: goods.units,
           unitRelation: {
             valence: goods[priceType],
@@ -795,6 +839,14 @@ export default {
         );
         //汇总信息
         this.summary();
+        //同步 GoodsView
+        if (this.goods.viewDialog && !this.goodsViewSyncingFromView) {
+          this.goodsViewSyncingFromGrid = true;
+          this.goodsViewValue = this.getGoodsViewSelected();
+          this.$nextTick(() => {
+            this.goodsViewSyncingFromGrid = false;
+          });
+        }
       }
       return effect;
     },
@@ -829,6 +881,153 @@ export default {
       this.typeChange(parm.class.type);
       this.pushGrid(parm.info, false);
     },
+    goodsViewInput(val) {
+      this.goodsViewValue = Array.isArray(val) ? val : [];
+      this.goodsViewSyncingFromView = true;
+      this.syncGridFromGoodsView(this.goodsViewValue);
+      this.$nextTick(() => {
+        this.goodsViewSyncingFromView = false;
+      });
+    },
+    getGoodsViewSelected() {
+      const api = this.grid.options.api;
+      if (!api) return [];
+      const rows = [];
+      api.forEachNode((node) => {
+        if (!node || !node.data) return;
+        if (node.data.key == null) return;
+        rows.push(node.data);
+      });
+      return rows.map((r) => {
+        const unitData = Array.isArray(r.unitData) ? r.unitData : [];
+        return {
+          lineId: r.uniqid,
+          id: r.key,
+          name: r.name,
+          number: r.number,
+          spec: r.spec,
+          type: r.goodsType,
+          data: r.goodsCombo != null ? String(r.goodsCombo) : "",
+          unit: unitData.length > 0 ? "-1" : r.unit,
+          units: unitData,
+          imgs: r.imgs,
+          buy: r.price,
+          strategy: [],
+          nums: r.nums == null || r.nums === "" ? 1 : r.nums,
+        };
+      });
+    },
+    buildGridRowFromGoods(item) {
+      const goods = item || {};
+      const priceType = "buy";
+      const unitData = Array.isArray(goods.units) ? goods.units : [];
+      const unitVal = goods.unit == null ? "" : goods.unit;
+      const row = {
+        uniqid: this.$lib.getUniqid(),
+        key: goods.id,
+        goodsType: goods.type,
+        imgs: goods.imgs,
+        unitData,
+        unitRelation: {
+          valence: goods[priceType],
+          multiple: 1,
+        },
+        warehouseId: null,
+          batchType: goods.batch,
+          validityType: goods.validity,
+          serialType: goods.serial,
+          name: goods.name,
+          number: goods.number,
+          spec: goods.spec,
+          attr: "",
+          unit: unitVal == "-1" ? "点击选择" : unitVal,
+          warehouse: goods.type == 0 ? "点击选择" : "",
+          batch: "",
+          mfd: "",
+          price: goods[priceType] == null || goods[priceType] === "" ? 0 : goods[priceType],
+          nums: item.nums == null || item.nums === "" ? 1 : item.nums,
+          serial: [],
+          total: null,
+          data: "",
+        };
+      row.total = this.$calc
+        .chain(row.price)
+        .multiply(row.nums)
+        .round(this.store.sys.fun.digit.money)
+        .done();
+      return row;
+    },
+    syncGridFromGoodsView(selection) {
+      const api = this.grid.options.api;
+      if (!api) return;
+      const list = Array.isArray(selection) ? selection : [];
+      const current = this.$grid.getGridData(this.grid.options).filter((r) => r && r.key != null);
+      const currentLineMap = {};
+      current.forEach((row) => {
+        const lineId = row && row.uniqid != null ? String(row.uniqid) : "";
+        if (!lineId) return;
+        currentLineMap[lineId] = row;
+      });
+      const next = [];
+      list.forEach((item, idx) => {
+        if (!item) return;
+        const id = Number(item.id);
+        if (!id) return;
+        const nums = item.nums == null || item.nums === "" ? 1 : Number(item.nums);
+        const lineIdRaw = item.lineId != null ? String(item.lineId) : "";
+        const lineId = lineIdRaw ? lineIdRaw : String(id) + "-" + String(idx);
+        const exist = currentLineMap[lineId];
+        if (exist) {
+          exist.nums = nums;
+          exist.price = item.buy != null ? item.buy : exist.price;
+          next.push(exist);
+        } else {
+          const row = this.buildGridRowFromGoods(item);
+          row.uniqid = lineId;
+          row.nums = nums;
+          row.price = item.buy != null ? item.buy : row.price;
+          next.push(row);
+        }
+      });
+      api.setRowData(next);
+      this.$grid.addGridRow(this.grid.options);
+      this.handleGrid();
+    },
+    togglePics() {
+      this.picVisible = !this.picVisible;
+      const api = this.grid.options.api;
+      const colApi = this.grid.options.columnApi;
+      if (!api || !colApi) return;
+      colApi.setColumnVisible("imgs", this.picVisible);
+      api.resetRowHeights && api.resetRowHeights();
+      this.$nextTick(() => {
+        api.sizeColumnsToFit && api.sizeColumnsToFit();
+      });
+    },
+    getImgUrl(row) {
+      const imgs = row ? row.imgs : null;
+      let val = "";
+      if (Array.isArray(imgs) && imgs.length > 0) {
+        const first = imgs[0];
+        val = typeof first == "string" ? first : first && first.url ? first.url : "";
+      } else if (imgs && typeof imgs == "object") {
+        val = imgs.url || "";
+      } else if (typeof imgs == "string") {
+        val = imgs;
+      }
+      if (this.$lib.validate("empty", val)) return "";
+      if (/^https?:\/\//.test(val)) return val;
+      return (this.store.base && this.store.base.cdnSite ? this.store.base.cdnSite : "") + val;
+    },
+    goodsViewOpen() {
+      this.goods.viewDialog = true;
+      this.goodsViewValue = this.getGoodsViewSelected();
+      this.goods.parm = {};
+    },
+    goodsViewDestroy() {
+      this.goods.viewDialog = false;
+      this.goods.parm = {};
+    },
     //商品层关闭
     goodsDestroy() {
       this.goods.dialog = false;
@@ -854,3 +1053,57 @@ export default {
   },
 };
 </script>
+
+<style scoped>
+.entry /deep/ .ag-pic-mode [col-id="imgs"] .ag-cell-value,
+.entry /deep/ [col-id="imgs"] .ag-cell-value {
+  overflow: visible !important;
+}
+.entry /deep/ .ag-pic-mode [col-id="imgs"] .ag-cell,
+.entry /deep/ [col-id="imgs"] .ag-cell {
+  overflow: visible !important;
+  padding: 0 !important;
+}
+.entry /deep/ .bill-img-cell {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 0;
+}
+.entry /deep/ .bill-img-wrap {
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 0 0 1px #ebeef5 inset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  position: relative;
+  z-index: 1;
+}
+.entry /deep/ .bill-img-wrap:hover {
+  transform: scale(1.6);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22), 0 0 0 1px #409eff inset;
+  z-index: 9999;
+  border-radius: 6px;
+}
+.entry /deep/ .bill-img-wrap img {
+  width: 92%;
+  height: 92%;
+  object-fit: contain;
+  display: block;
+}
+.entry /deep/ .ag-pic-mode .ag-center-cols-viewport,
+.entry /deep/ .ag-pic-mode .ag-body-viewport,
+.entry /deep/ .ag-pic-mode .ag-body {
+  overflow: visible !important;
+}
+.entry /deep/ .ag-cell {
+  overflow: visible;
+}
+</style>

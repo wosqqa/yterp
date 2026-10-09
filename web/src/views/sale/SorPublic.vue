@@ -215,7 +215,11 @@
               </div>
 
               <div class="tr" v-for="row in rows" :key="row.key">
-                <div class="td no hideThreeColsUi">{{ row.no }}</div>
+                <div
+                  class="td no hideThreeColsUi"
+                  :class="{ noCopyable: groupBy === 'pack' && row.no != null && String(row.no) !== '' }"
+                  @click="groupBy === 'pack' && row.no != null && String(row.no) !== '' && onPackNoClick(row)"
+                >{{ row.no }}</div>
                 <div class="td desc big">{{ row.desc }}</div>
                 <div class="td pic">
                   <div class="picGrid" :class="{ singleCol: rowDisplay === 'single' }">
@@ -323,11 +327,11 @@ import axios from "axios";
 function getApiBase() {
   try {
     if (typeof window !== "undefined" && window.location) {
-      const host = window.location.hostname || "127.0.0.1";
+      const host = window.location.host;
       const protocol = window.location.protocol || "http:";
       const port = window.location.port || "";
       if (String(port) === "8084") return "http://erp.51ppy.com/";
-      return `${protocol}//${host}:8000/`;
+      return `${protocol}//${host}/`;
     }
   } catch (e) {}
   return "http://127.0.0.1:8000/";
@@ -1638,6 +1642,98 @@ export default {
       const s = val == null ? "" : String(val).trim();
       return s ? s : "未装箱";
     },
+    buildPackCategorySummary(packKey) {
+      const pKey = packKey == null ? "" : String(packKey);
+      const qtyMap = {};
+      const metaMap = {};
+      let total = 0;
+      for (const item of this.detailRows) {
+        const pk = item && item.data != null ? String(item.data) : "";
+        if (pk !== pKey) continue;
+        const goods = objectSeek(item, "goodsData") || {};
+        const info = this.getCategoryInfo(item, goods) || {};
+        const rawKey = info.key != null ? info.key : "-1";
+        const cKey = String(rawKey);
+        let cName = "";
+        let cSort = 999999;
+        try {
+          const node = this.getCategoryNodeById(cKey);
+          if (node) {
+            if (node.name) cName = String(node.name);
+            if (node.sort != null) cSort = Number(node.sort);
+          }
+        } catch (e) {}
+        if (!cName) {
+          const byName = this.getCategoryName(cKey);
+          if (byName && String(byName) !== cKey) cName = String(byName);
+        }
+        if (!cName) cName = cKey === "-1" ? "未分类" : "未分类";
+        const qty = Number(item && item.nums) || 0;
+        if (qtyMap[cKey] == null) {
+          qtyMap[cKey] = 0;
+          metaMap[cKey] = { name: cName, sort: cSort };
+        } else {
+          if (!metaMap[cKey].name && cName) metaMap[cKey].name = cName;
+          if (cSort < metaMap[cKey].sort) metaMap[cKey].sort = cSort;
+        }
+        qtyMap[cKey] = chainAdd(qtyMap[cKey], qty);
+        total = chainAdd(total, qty);
+      }
+      const keys = Object.keys(qtyMap);
+      if (!keys.length) return { text: "", total };
+      const parts = keys
+        .map(k => ({
+          k,
+          name: (metaMap[k] && metaMap[k].name) || "未分类",
+          n: Number(qtyMap[k]) || 0,
+          sort: (metaMap[k] && metaMap[k].sort) || 999999
+        }))
+        .sort((a, b) => a.sort - b.sort || sortNumStr(a.k, b.k));
+      const text = parts.map(p => p.name + (Number(p.n) || 0)).join("/") + "共" + total + "件";
+      return { text, total, parts };
+    },
+    async copyTextToClipboard(text) {
+      if (!text) return false;
+      try {
+        if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+          return true;
+        }
+      } catch (e) {}
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+        return ok;
+      } catch (e) {
+        return false;
+      }
+    },
+    async onPackNoClick(row) {
+      if (this.groupBy !== "pack") return;
+      const packKey = row && row.packKey != null ? row.packKey : (row && row.no != null ? String(row.no) : "");
+      const { text } = this.buildPackCategorySummary(packKey || String(row.no));
+      if (!text) {
+        this._showToastPublic("当前箱无分类明细");
+        return;
+      }
+      const ok = await this.copyTextToClipboard(text);
+      this._showToastPublic(ok ? "已复制：" + text : "复制失败，请手动复制：" + text);
+    },
+    _showToastPublic(msg) {
+      try {
+        if (this.$message) {
+          this.$message({ message: msg, type: "success", duration: 2000 });
+          return;
+        }
+      } catch (e) {}
+      alert(msg);
+    },
     getImgUrl(goods) {
       if (!goods) return "";
       const imgs = goods.imgs;
@@ -2287,8 +2383,41 @@ function sortNumStr(a, b) {
   font-weight: 700;
 }
 .no {
-  width: 50px;
-  flex: 0 0 50px;
+  width: 70px;
+  flex: 0 0 70px;
+  font-size: 25px;
+  font-weight: 700;
+}
+.noCopyable {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease, color 0.15s ease;
+  position: relative;
+}
+.noCopyable:hover {
+  background: #ecf5ff;
+  color: #409eff;
+}
+.noCopyable::after {
+  content: "点击复制分类汇总";
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 8px);
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: normal;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 99;
+}
+.noCopyable:hover::after {
+  opacity: 1;
 }
 .desc {
   width: 130px;

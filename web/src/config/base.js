@@ -8,11 +8,11 @@ export function getApiBase() {
   }
   try {
     if (typeof window !== "undefined" && window.location) {
-      const host = window.location.hostname || "127.0.0.1";
+      const host = window.location.host;
       const protocol = window.location.protocol || "http:";
       const port = window.location.port || "";
       if (String(port) === "8084") return "http://erp.51ppy.com/";
-      return `${protocol}//${host}:8000/`;
+      return `${protocol}//${host}/`;
     }
   } catch (e) {}
   return "http://127.0.0.1:8000/";
