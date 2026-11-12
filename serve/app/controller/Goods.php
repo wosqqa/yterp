@@ -36,6 +36,43 @@ class Goods extends Acl {
         ];//返回数据
         return json($result);
     }
+    // 仅更新商品基础价格，整个批次原子提交并检查旧价格。
+    public function batchPrice(){
+        $root = getUserRoot();
+        if ($root !== 'all' && empty($root['base']['edit'])) return json(['state'=>'error','info'=>'没有修改权限!'],403);
+        $rows = input('post.rows/a', []);
+        if (!$rows || count($rows)>1000) return json(['state'=>'error','info'=>'请选择1至1000个商品!']);
+        try {
+            $count = Db::transaction(function() use ($rows) {
+                $seen=[]; $changes=[];
+                usort($rows,function($a,$b){return ($a['id']??0)<=>($b['id']??0);});
+                foreach($rows as $row){
+                    $id=filter_var($row['id']??null,FILTER_VALIDATE_INT);
+                    if(!$id || isset($seen[$id])) throw new \RuntimeException('商品参数不正确!');
+                    $seen[$id]=true;
+                    $old=Db::name('goods')->where('id',$id)->lock(true)->find();
+                    if(!$old) throw new \RuntimeException('商品已删除，请刷新!');
+                    $update=[];
+                    foreach(['buy','sell'] as $field){
+                        if(!array_key_exists($field,$row)) continue;
+                        $value=(string)$row[$field]; $before=(string)($row['old_'.$field]??'');
+                        if(!preg_match('/^\d{1,8}(?:\.\d{1,4})?$/D',$value) || !is_numeric($before)) throw new \RuntimeException('价格须为非负数，最多4位小数!');
+                        if(bccomp((string)$old[$field],$before,4)!==0) throw new \RuntimeException('商品 '.$old['number'].' 的价格已被修改，请重新打开调价窗口!');
+                        if(bccomp((string)$old[$field],$value,4)!==0) $update[$field]=$value;
+                    }
+                    if($update){
+                        Db::name('goods')->where('id',$id)->update($update);
+                        $changes[]=$old['number'].': '.json_encode(['before'=>array_intersect_key($old,$update),'after'=>$update],JSON_UNESCAPED_UNICODE);
+                    }
+                }
+                foreach($changes as $change) pushLog('批量调价 '.$change);
+                return count($changes);
+            });
+            return json(['state'=>'success','info'=>$count]);
+        } catch(\RuntimeException $e){return json(['state'=>'error','info'=>$e->getMessage()]);}
+        catch(\Throwable $e){return json(['state'=>'error','info'=>'保存失败，全部修改已撤销!']);}
+    }
+
     //新增|更新
     public function save(){
         $input=input('post.');
@@ -198,6 +235,28 @@ class Goods extends Acl {
                 $fileInfo=Filesystem::disk('upload')->putFile('goods', $file, 'uniqid');
                 $filePath=request()->domain().'/static/upload/'.$fileInfo;
                 $result=['state'=>'success','info'=>$filePath];
+            }catch(ValidateException $e) {
+                return json(['state'=>'error','info'=>$e->getMessage()]);
+            }
+		}
+		return json($result);
+    }
+    //上传(COS云存储)
+    public function uploadCos(){
+		$file=request()->file('file');//获取上传文件
+		if (empty($file)){
+		    $result=['state'=>'error','info'=>'传入数据不完整!'];
+		}else{
+		    try{
+                validate(['file'=>['fileSize'=>2*1024*1024,'fileExt'=>'png,gif,jpg,jpeg']])->check(['file'=>$file]);
+                $filePath=cosUploadFile($file,'goods');//上传至腾讯COS
+                if($filePath){
+                    $result=['state'=>'success','info'=>$filePath,'channel'=>'cos'];
+                }else{
+                    //COS未配置或上传失败|回退本地存储
+                    $fileInfo=Filesystem::disk('upload')->putFile('goods', $file, 'uniqid');
+                    $result=['state'=>'success','info'=>request()->domain().'/static/upload/'.$fileInfo,'channel'=>'local'];
+                }
             }catch(ValidateException $e) {
                 return json(['state'=>'error','info'=>$e->getMessage()]);
             }

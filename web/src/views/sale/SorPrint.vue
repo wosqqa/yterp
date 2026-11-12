@@ -288,7 +288,15 @@
           <div v-if="headerMode !== 'invoice'" class="summary">
         <div class="sumLeft">
           <div class="sumTitle">NOTE：</div>
-          <div class="sumNote">{{ noteText }}</div>
+          <div class="sumNoteWrap">
+            <textarea
+              class="sumNoteInput sumNoteInputScreen"
+              rows="3"
+              v-model="noteManual"
+              placeholder="在这里输入备注（打印时会显示）..."
+            ></textarea>
+            <div class="sumNoteStaticPrint">{{ noteText }}</div>
+          </div>
         </div>
         <div class="sumRight">
           <div class="sumRow">
@@ -380,6 +388,7 @@ export default {
       exchangeRateManual: "6.85",
       freightManual: 30,
       depositManual: 0,
+      noteManual: "",
       imgQtyHidden: false,
       unitPriceHidden: false,
       hideWarehouse2: false,
@@ -430,6 +439,9 @@ export default {
     freightVal() {
       this.refreshInvoiceTotalIfNeeded();
       this.persistFreightDebounced();
+    },
+    noteManual() {
+      this.persistInvoiceDraftDebounced();
     }
   },
   computed: {
@@ -566,7 +578,9 @@ export default {
           }
 
           const qty = Number(item && item.nums) || 0;
-          const amt = item && item.tpt != null && item.tpt !== "" ? Number(item.tpt) : Number(item && item.total) || 0;
+          const amt = this.normalizeMoneyValue(
+            item && item.tpt != null && item.tpt !== "" ? item.tpt : item && item.total
+          );
           const itemMetrics = this.getItemMetrics(item);
           map[key].ttQty = this.$calc.chain(map[key].ttQty).add(qty).done();
           map[key].amountVal = this.$calc.chain(map[key].amountVal).add(amt).done();
@@ -647,7 +661,9 @@ export default {
           const goods = this.$lib.objectSeek(item, "goodsData") || {};
           const categoryInfo = this.getCategoryInfo(item, goods);
           const qty = Number(item && item.nums) || 0;
-          const amt = item && item.tpt != null && item.tpt !== "" ? Number(item.tpt) : Number(item && item.total) || 0;
+          const amt = this.normalizeMoneyValue(
+            item && item.tpt != null && item.tpt !== "" ? item.tpt : item && item.total
+          );
           const usdVal = this.exchangeRate ? amt / this.exchangeRate : 0;
           const itemMetrics = this.getItemMetrics(item);
           const wid = item && item.warehouse != null ? String(item.warehouse) : "";
@@ -748,7 +764,7 @@ export default {
           order.push(key);
         }
         const qty = Number(item.nums) || 0;
-        const amt = item.tpt != null && item.tpt !== "" ? Number(item.tpt) : Number(item.total) || 0;
+        const amt = this.normalizeMoneyValue(item.tpt != null && item.tpt !== "" ? item.tpt : item.total);
         const itemMetrics = this.getItemMetrics(item);
         map[key].ttQty = this.$calc.chain(map[key].ttQty).add(qty).done();
         map[key].amountVal = this.$calc.chain(map[key].amountVal).add(amt).done();
@@ -922,7 +938,7 @@ export default {
     totalRmbVal() {
       let total = this.$calc.chain(0);
       for (const row of this.rows) total.add(Number(row.amountVal) || 0);
-      return total.done();
+      return this.normalizeMoneyValue(total.done());
     },
     totalRmb() {
       return this.formatMoney(this.totalRmbVal, 2);
@@ -948,7 +964,8 @@ export default {
       return this.formatMeasure(this.totalVolumeVal);
     },
     noteText() {
-      return this.classData && this.classData.data != null ? String(this.classData.data).trim() : "";
+      const raw = (this.noteManual != null && this.noteManual !== undefined) ? String(this.noteManual) : "";
+      return raw;
     },
     freightVal() {
       const n = Number(String(this.freightManual).replace(/,/g, ""));
@@ -1011,20 +1028,23 @@ export default {
     loadInvoiceDraft() {
       try {
         const scope = this.getInvoiceScope();
+        this.freightManual = 30;
+        this.depositManual = 0;
+        this.noteManual = "";
         const seller = localStorage.getItem(this.getInvoiceKey("seller"));
         const to = localStorage.getItem(this.getInvoiceKey("to"));
         const wordsText = localStorage.getItem(this.getInvoiceKey("wordsText"));
         const bankText = localStorage.getItem(this.getInvoiceKey("bankText"));
         const freightRaw = localStorage.getItem(this.getInvoiceKey("freight"));
+        const noteRaw = localStorage.getItem(this.getInvoiceKey("note"));
 
         const hasAnyScoped =
-          seller != null || to != null || wordsText != null || bankText != null || freightRaw != null;
+          seller != null || to != null || wordsText != null || bankText != null || freightRaw != null || noteRaw != null;
 
         const legacySeller = !hasAnyScoped && scope !== "global" ? localStorage.getItem(this.getInvoiceLegacyKey("seller")) : null;
         const legacyTo = !hasAnyScoped && scope !== "global" ? localStorage.getItem(this.getInvoiceLegacyKey("to")) : null;
         const legacyWordsText = !hasAnyScoped && scope !== "global" ? localStorage.getItem(this.getInvoiceLegacyKey("wordsText")) : null;
         const legacyBankText = !hasAnyScoped && scope !== "global" ? localStorage.getItem(this.getInvoiceLegacyKey("bankText")) : null;
-        const legacyFreight = !hasAnyScoped && scope !== "global" ? localStorage.getItem(this.getInvoiceLegacyKey("freight")) : null;
 
         this.invoiceSeller = "";
         this.invoiceTo = "";
@@ -1037,14 +1057,19 @@ export default {
         this.invoiceWordsText = wordsText != null ? wordsText : legacyWordsText != null ? legacyWordsText : "";
         this.invoiceBankText = bankText != null ? bankText : legacyBankText != null ? legacyBankText : "";
 
-        const freightStr = freightRaw != null ? freightRaw : legacyFreight != null ? legacyFreight : null;
-        if (freightStr != null) {
-          const freightNum = Number(String(freightStr).replace(/,/g, ""));
+        if (freightRaw != null) {
+          const freightNum = Number(String(freightRaw).replace(/,/g, ""));
           if (Number.isFinite(freightNum)) this.freightManual = freightNum;
+        }
+        if (noteRaw != null) {
+          this.noteManual = String(noteRaw);
         }
 
         if (!hasAnyScoped && scope !== "global") this.persistInvoiceDraftDebounced();
       } catch (e) {
+        this.freightManual = 30;
+        this.depositManual = 0;
+        this.noteManual = "";
         this.invoiceSeller = "";
         this.invoiceTo = "";
         this.invoiceTotalText = "";
@@ -1060,6 +1085,7 @@ export default {
         localStorage.setItem(this.getInvoiceKey("wordsText"), this.invoiceWordsText || "");
         localStorage.setItem(this.getInvoiceKey("bankText"), this.invoiceBankText || "");
         localStorage.setItem(this.getInvoiceKey("freight"), String(this.freightManual != null ? this.freightManual : ""));
+        localStorage.setItem(this.getInvoiceKey("note"), this.noteManual != null ? String(this.noteManual) : "");
       } catch (e) {}
     },
     persistInvoiceDraftDebounced() {
@@ -1758,6 +1784,11 @@ export default {
       if (/^https?:\/\//.test(val)) return val;
       return (this.store.base && this.store.base.cdnSite ? this.store.base.cdnSite : "") + val;
     },
+    normalizeMoneyValue(num) {
+      const n = Number(String(num == null ? 0 : num).replace(/,/g, ""));
+      if (!Number.isFinite(n)) return 0;
+      return this.$calc.chain(n).round(2).done();
+    },
     formatMoney(num, digits) {
       const n = Number(num);
       if (!Number.isFinite(n)) return "0.00";
@@ -1791,11 +1822,11 @@ export default {
   overflow: auto;
 }
 .previewWorkbench {
-  width: 760px;
+  width: 812px;
   margin: 0 auto;
 }
 .previewWorkbench.metricsMode {
-  width: 940px;
+  width: 992px;
 }
 .switchBar {
   width: 100%;
@@ -1804,13 +1835,15 @@ export default {
   justify-content: space-between;
 }
 .paper {
-  width: 760px;
+  /* 内容宽度等于固定列宽之和，外边框另计。 */
+  width: 810px;
+  box-sizing: content-box;
   background: #fff;
   border: 1px solid #dcdfe6;
   flex: 0 0 auto;
 }
 .paper.metricsMode {
-  width: 940px;
+  width: 990px;
 }
 .paper.invoiceMode {
   border-color: #333;
@@ -1818,12 +1851,12 @@ export default {
 .summaryFloat {
   position: fixed;
   top: 52px;
-  left: calc(50% - 860px);
+  left: calc(50% - 886px);
   z-index: 40;
   width: 420px;
 }
 .summaryFloat.metricsMode {
-  left: calc(50% - 950px);
+  left: calc(50% - 976px);
 }
 .summaryFilterBar {
   display: flex;
@@ -2187,6 +2220,7 @@ export default {
 }
 .tr {
   display: flex;
+  flex-wrap: nowrap;
   border-top: 1px solid #333;
 }
 .tr:first-child {
@@ -2200,6 +2234,10 @@ export default {
   align-items: center;
   justify-content: center;
   text-align: center;
+  flex-shrink: 0;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 .td:last-child {
   border-right: 0;
@@ -2274,7 +2312,7 @@ export default {
   width: 100px;
 }
 .usd {
-  width: 90px;
+  width: 100px;
 }
 .metric {
   width: 90px;
@@ -2384,19 +2422,29 @@ export default {
 }
 @media print {
   .exchangeRateInputScreen,
-  .exchangeRatePrefixScreen {
+  .exchangeRatePrefixScreen,
+  .uPriceInputScreen {
     display: none !important;
   }
   .exchangeRateStaticPrint {
     display: inline-block !important;
   }
+  .uPriceStaticPrint {
+    display: inline-block !important;
+    width: 100%;
+    text-align: center;
+  }
   .freightInputScreen,
-  .depositInputScreen {
+  .depositInputScreen,
+  .sumNoteInputScreen {
     display: none !important;
   }
   .freightStaticPrint,
   .depositStaticPrint {
     display: inline-block !important;
+  }
+  .sumNoteStaticPrint {
+    display: block !important;
   }
 }
 .freightStaticPrint,
@@ -2406,22 +2454,19 @@ export default {
 .depositInput {
   width: 100%;
 }
-.depositInput >>> input {
-  text-align: right;
-  padding: 0;
+.depositInput >>> .el-input__inner {
   border: none;
-  border-radius: 0;
-  box-shadow: none;
   background: transparent;
+  box-shadow: none;
+  text-align: right;
   color: #d40000;
   font-weight: 700;
+  padding: 0;
 }
-.redLabel {
-  color: #d40000;
+.depositInput >>> .el-input__inner:focus {
+  background: #fff;
 }
-.redVal {
-  color: #d40000;
-}
+.sumNoteWrap { position: relative; width: 100%; }
 .summary {
   display: flex;
 }
@@ -2436,6 +2481,25 @@ export default {
   font-weight: 700;
   color: #d40000;
 }
+.sumNoteInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #303133;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: vertical;
+  min-height: 80px;
+  margin-top: 8px;
+}
+.sumNoteInput:focus {
+  background: #fff;
+}
+.sumNoteStaticPrint { display: none; margin-top: 8px; }
 .sumNote {
   margin-top: 8px;
   font-size: 12px;

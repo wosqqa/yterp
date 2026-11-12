@@ -144,6 +144,8 @@ const NotFound = () =>
 //公共页面-无需登录
 const SorPublic = () =>
   import(/* webpackChunkName: 'public'*/ "@/views/sale/SorPublic");
+const SorSelectPublic = () =>
+  import(/* webpackChunkName: 'public'*/ "@/views/sale/SorSelectPublic");
 
 Vue.use(Router);
 const example = new Router({
@@ -898,6 +900,22 @@ const example = new Router({
       component: SorPublic,
       meta: {
         title: "销售订单明细",
+      },
+    },
+    {
+      path: "/public/sor-select",
+      name: "sorSelectPublic",
+      component: SorSelectPublic,
+      meta: {
+        title: "Customer Selection",
+      },
+    },
+    {
+      path: "/public/sor-select/:orderId",
+      name: "sorSelectPublicWithId",
+      component: SorSelectPublic,
+      meta: {
+        title: "Customer Selection",
       },
     },
     {

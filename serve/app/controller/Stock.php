@@ -391,8 +391,9 @@ class Stock extends Acl {
                 if(!empty($info)){
                     $goods=Db::name('goods')->where([['id','=',$input['goods']]])->find();
                     if($goods['unit']=='-1'){
-                        foreach ($info as $infoKey=>$infoVo) {
-                            $info[$infoKey]['nums']=unitSwitch($infoVo['nums'],json_decode($goods['units'],true));
+                        $units=json_decode($goods['units'],true);
+                    foreach ($info as $infoKey=>$infoVo) {
+                            $info[$infoKey]['nums']=unitSwitch($infoVo['nums'],$units);
                         }
                     }
                 }

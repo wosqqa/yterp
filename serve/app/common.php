@@ -581,6 +581,224 @@ function getSys($name = []) {
     }
     return $result;
 }
+
+function getBaseCdnSite(){
+    static $cached = null;
+    if($cached !== null) return $cached;
+    $cached = '';
+    try {
+        $base = getSys('base');
+        if(is_array($base) && !empty($base['cdnSite'])){
+            $s = rtrim(strval($base['cdnSite']),'/');
+            if($s !== '') $cached = $s;
+        }
+    } catch (\Exception $e) {
+        $cached = '';
+    }
+    return $cached;
+}
+
+function fetchImageToTempFile($url, &$tmpFilesRef = null){
+    $u = trim(strval($url));
+    if($u === '') return null;
+    $maxBytes = 2 * 1024 * 1024;
+
+    $detectExt = function($rawPath, $contentType = ''){
+        $ext = 'jpeg';
+        $ct = strtolower(strval($contentType));
+        if(strpos($ct,'png') !== false) return 'png';
+        if(strpos($ct,'jpeg') !== false || strpos($ct,'jpg') !== false) return 'jpeg';
+        if(strpos($ct,'gif') !== false) return 'gif';
+        if(strpos($ct,'webp') !== false) return 'webp';
+        if(preg_match('/\.(png)(\?|$)/i',$rawPath)) return 'png';
+        if(preg_match('/\.(jpe?g)(\?|$)/i',$rawPath)) return 'jpeg';
+        if(preg_match('/\.(gif)(\?|$)/i',$rawPath)) return 'gif';
+        if(preg_match('/\.(webp)(\?|$)/i',$rawPath)) return 'webp';
+        return $ext;
+    };
+
+    $storeToTmp = function($bin, $extHint) use ($maxBytes, &$tmpFilesRef){
+        if(!is_string($bin) || strlen($bin) <= 0 || strlen($bin) > $maxBytes) return null;
+        $base = tempnam(sys_get_temp_dir(), 'xlsximg_');
+        if($base === false) return null;
+        @unlink($base);
+        $ext = in_array($extHint, ['png','jpeg','gif','webp']) ? $extHint : 'jpeg';
+        $path = $base . '.' . $ext;
+        $ok = @file_put_contents($path, $bin);
+        if($ok === false) return null;
+        if(is_array($tmpFilesRef)) $tmpFilesRef[] = $path;
+        return $path;
+    };
+
+    $contentType = '';
+    $bin = null;
+
+    if(!preg_match('/^[a-z][a-z0-9+\-.]*:\/\//i', $u)){
+        $relPath = ltrim($u, '/');
+        $candidates = [];
+        if(function_exists('public_path')){
+            try { $candidates[] = rtrim(public_path(),'\\/').DIRECTORY_SEPARATOR.$relPath; } catch (\Throwable $e){}
+        }
+        try { $candidates[] = root_path().'public'.DIRECTORY_SEPARATOR.$relPath; } catch (\Throwable $e){}
+        try { $candidates[] = dirname(__DIR__,1).DIRECTORY_SEPARATOR.'public'.DIRECTORY_SEPARATOR.$relPath; } catch (\Throwable $e){}
+        foreach($candidates as $local){
+            if($local !== '' && is_file($local) && is_readable($local)){
+                $sz = @filesize($local);
+                if($sz !== false && $sz > 0 && $sz <= $maxBytes){
+                    $read = @file_get_contents($local);
+                    if(is_string($read) && strlen($read) > 0){
+                        $bin = $read;
+                        break;
+                    }
+                }
+            }
+        }
+        if($bin === null){
+            $cdn = getBaseCdnSite();
+            if($cdn !== ''){
+                $full = $cdn . '/' . $relPath;
+                if(function_exists('curl_init')){
+                    $ch = curl_init();
+                    curl_setopt($ch, CURLOPT_URL, $full);
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+                    curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
+                    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
+                    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+                    $data = curl_exec($ch);
+                    $contentType = strval(curl_getinfo($ch, CURLINFO_CONTENT_TYPE));
+                    $code = intval(curl_getinfo($ch, CURLINFO_RESPONSE_CODE));
+                    curl_close($ch);
+                    if($code >= 200 && $code < 300 && is_string($data) && strlen($data) > 0 && strlen($data) <= $maxBytes){
+                        $bin = $data;
+                    }
+                } else {
+                    $ctx = stream_context_create(['http'=>['timeout'=>5],'ssl'=>['verify_peer'=>false,'verify_peer_name'=>false]]);
+                    $data = @file_get_contents($full, false, $ctx);
+                    if(is_string($data) && strlen($data) > 0 && strlen($data) <= $maxBytes) $bin = $data;
+                }
+            }
+        }
+        if($bin === null) return null;
+        return $storeToTmp($bin, $detectExt($u, $contentType));
+    }
+
+    if(function_exists('curl_init')){
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $u);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        $data = curl_exec($ch);
+        $contentType = strval(curl_getinfo($ch, CURLINFO_CONTENT_TYPE));
+        $code = intval(curl_getinfo($ch, CURLINFO_RESPONSE_CODE));
+        curl_close($ch);
+        if($code >= 200 && $code < 300 && is_string($data) && strlen($data) > 0 && strlen($data) <= $maxBytes){
+            $bin = $data;
+        }
+    } else {
+        $ctx = stream_context_create(['http'=>['timeout'=>5],'ssl'=>['verify_peer'=>false,'verify_peer_name'=>false]]);
+        $data = @file_get_contents($u, false, $ctx);
+        if(is_string($data) && strlen($data) > 0 && strlen($data) <= $maxBytes) $bin = $data;
+    }
+    if($bin === null) return null;
+    return $storeToTmp($bin, $detectExt($u, $contentType));
+}
+//腾讯COS|读取配置|未配置时返回false
+function getCosConfig(){
+    static $cfg=null;
+    if($cfg!==null) return $cfg;
+    $cfg=false;
+    try{
+        $secretId=trim(strval(\think\facade\Env::get('cos.secret_id','')));
+        $secretKey=trim(strval(\think\facade\Env::get('cos.secret_key','')));
+        $region=trim(strval(\think\facade\Env::get('cos.region','')));
+        $bucket=trim(strval(\think\facade\Env::get('cos.bucket','')));
+        if($secretId!=='' && $secretKey!=='' && $region!=='' && $bucket!==''){
+            $cfg=[
+                'secretId'=>$secretId,
+                'secretKey'=>$secretKey,
+                'region'=>$region,
+                'bucket'=>$bucket,
+                'domain'=>rtrim(trim(strval(\think\facade\Env::get('cos.domain',''))),'/'),
+                'prefix'=>trim(trim(strval(\think\facade\Env::get('cos.prefix','goods')),'/'),'/'),
+            ];
+        }
+    }catch(\Throwable $e){
+        $cfg=false;
+    }
+    return $cfg;
+}
+//腾讯COS|上传对象|成功返回可访问URL|失败返回null
+function cosPutObject($key,$body,$contentType='application/octet-stream'){
+    $cfg=getCosConfig();
+    if($cfg===false) return null;
+    if(!function_exists('curl_init')) return null;
+    $key=ltrim(strval($key),'/');
+    if($key==='') return null;
+    $host=$cfg['bucket'].'.cos.'.$cfg['region'].'.myqcloud.com';
+    $keyTime=time().';'.(time()+3600);
+    $signKey=hash_hmac('sha1',$keyTime,$cfg['secretKey']);
+    #签名:httpString=方法\n路径\n请求参数\n请求头\n
+    $httpHeaders='content-type='.rawurlencode($contentType).'&host='.rawurlencode($host);
+    $httpString="put\n/".$key."\n\n".$httpHeaders."\n";
+    $stringToSign="sha1\n".$keyTime."\n".sha1($httpString)."\n";
+    $authorization='q-sign-algorithm=sha1'
+        .'&q-ak='.$cfg['secretId']
+        .'&q-sign-time='.$keyTime
+        .'&q-key-time='.$keyTime
+        .'&q-header-list=content-type;host'
+        .'&q-url-param-list='
+        .'&q-signature='.hash_hmac('sha1',$stringToSign,$signKey);
+    $ch=curl_init();
+    curl_setopt($ch,CURLOPT_URL,'https://'.$host.'/'.$key);
+    curl_setopt($ch,CURLOPT_CUSTOMREQUEST,'PUT');
+    curl_setopt($ch,CURLOPT_POSTFIELDS,$body);
+    curl_setopt($ch,CURLOPT_HTTPHEADER,[
+        'Authorization: '.$authorization,
+        'Content-Type: '.$contentType,
+        'Host: '.$host,
+        'Expect:',
+    ]);
+    curl_setopt($ch,CURLOPT_RETURNTRANSFER,true);
+    curl_setopt($ch,CURLOPT_CONNECTTIMEOUT,5);
+    curl_setopt($ch,CURLOPT_TIMEOUT,30);
+    curl_setopt($ch,CURLOPT_SSL_VERIFYPEER,false);
+    curl_setopt($ch,CURLOPT_SSL_VERIFYHOST,false);
+    $res=curl_exec($ch);
+    $code=intval(curl_getinfo($ch,CURLINFO_RESPONSE_CODE));
+    $error=strval(curl_error($ch));
+    curl_close($ch);
+    if($code<200 || $code>=300){
+        pushLog('COS上传失败|key:'.$key.'|code:'.$code.'|error:'.$error.'|response:'.substr(strval($res),0,300));
+        return null;
+    }
+    $domain=$cfg['domain']!==''?$cfg['domain']:'https://'.$host;
+    return $domain.'/'.$key;
+}
+//腾讯COS|上传上传文件对象|成功返回可访问URL|失败返回null
+function cosUploadFile($file,$prefix=''){
+    $cfg=getCosConfig();
+    if($cfg===false) return null;
+    if(empty($file)) return null;
+    $localPath=$file->getRealPath();
+    if($localPath===false || !is_file($localPath)) return null;
+    $body=@file_get_contents($localPath);
+    if(!is_string($body) || strlen($body)<=0) return null;
+    $mime=['png'=>'image/png','gif'=>'image/gif','jpg'=>'image/jpeg','jpeg'=>'image/jpeg','webp'=>'image/webp'];
+    $ext=strtolower(strval($file->getOriginalExtension()));
+    isset($mime[$ext])||($ext='jpg');
+    $dir=trim(strval($prefix),'/');
+    if($dir==='') $dir=$cfg['prefix'];
+    $key=($dir!==''?$dir.'/':'').date('Ymd').'/'.uniqid().'.'.$ext;
+    return cosPutObject($key,$body,$mime[$ext]);
+}
 //写入日志
 function pushLog($info,$user=false) {
     db('log')->insert([

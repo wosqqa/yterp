@@ -162,7 +162,11 @@
 									<transition name="el-fade-in">
 										<template v-if="contacts.dialog">
 											<el-form :model="contacts.form" :rules="contacts.rules" ref="contactsForm" label-width="80px" >
-												<el-form-item label="主联系人">
+												<el-form-item label="智能识别">
+                                                    <el-input v-model="contacts.pastedAddress" type="textarea" :rows="3" maxlength="1000" placeholder="粘贴整段收件信息，如：张三 13800138000 广东省广州市白云区…" />
+                                                    <el-button size="mini" type="primary" :disabled="!contacts.pastedAddress.trim()" @click="recognizeContact">识别并填入</el-button>
+                                                </el-form-item>
+                                                <el-form-item label="主联系人">
 													<el-switch v-model="contacts.form.main"></el-switch>
 												</el-form-item>
 												<el-form-item label="联系人员" prop="name">
@@ -395,6 +399,7 @@
 					}
 				},
 				contacts:{
+                    pastedAddress: "",
 					index: -1,
 					dialog:false,
 					form:{
@@ -707,9 +712,59 @@
 					});
 				}).catch(()=>{});
 			},
+            recognizeContact() {
+                const text = this.contacts.pastedAddress.trim();
+                const labels = /(?:收件人(?:姓名)?|收货人|联系人(?:员)?|姓名|联系(?:电话|号码|地址)|手机号(?:码)?|电话|收(?:货|件)地址|详细地址|地址|备注(?:信息)?|唛头)\s*[:：]/g;
+                const phonePattern = /(?<!\d)(?:\+86[ -]*)?1[3-9]\d(?:[ -]?\d){8}(?!\d)|(?<!\d)(?:\+\d{1,3}[ -]+\d(?:[ -]?\d){6,13}|0\d{2,3}[- ]\d{7,8})(?!\d)/;
+                const clean = value => value.replace(/^[\s,，;；+]+|[\s,，;；+]+$/g, "");
+                const fields = {};
+                const matches = Array.from(text.matchAll(labels));
+                matches.forEach((match, index) => {
+                    const label = match[0];
+                    const next = matches[index + 1];
+                    const value = clean(text.slice(match.index + label.length, next ? next.index : text.length));
+                    if (/地址/.test(label)) fields.add = value;
+                    else if (/备注|唛头/.test(label)) fields.data = /唛头/.test(label) ? "唛头：" + value : value;
+                    else if (/电话|号码|手机号/.test(label)) fields.tel = value;
+                    else {
+                        const phone = value.match(phonePattern);
+                        fields.name = clean(phone ? value.slice(0, phone.index) : value);
+                        if (phone) fields.tel = phone[0];
+                    }
+                });
+                if (!matches.length) {
+                    const phone = text.match(phonePattern);
+                    if (phone) {
+                        fields.tel = phone[0];
+                        const before = clean(text.slice(0, phone.index));
+                        const after = clean(text.slice(phone.index + phone[0].length));
+                        const looksLikeName = value => /^(?:[\u4e00-\u9fff·]{2,5}|[A-Za-z]+(?:[ .'-][A-Za-z]+){0,4})$/.test(value)
+                            && !/省|市|区|县|镇|村|路|街|号/.test(value);
+                        if (looksLikeName(before)) {
+                            fields.name = before;
+                            fields.add = after;
+                        } else if (looksLikeName(after)) {
+                            fields.name = after;
+                            fields.add = before;
+                        } else {
+                            fields.add = [before, after].filter(Boolean).join(" ");
+                        }
+                    } else {
+                        fields.add = text;
+                    }
+                }
+                Object.keys(fields).forEach(key => {
+                    if (fields[key]) this.contacts.form[key] = fields[key].replace(/\s*\n\s*/g, " ");
+                });
+                this.$refs.contactsForm.clearValidate();
+                if (!fields.name || !fields.tel || !fields.add) {
+                    this.$message.warning("已填入识别到的信息，请核对并补全");
+                }
+            },
 			//添加联系资料
 			setContacts(index) {
 				this.contacts.form=index==-1?Object.assign({},this.$options.data().contacts.form):Object.assign({},this.form.contacts[index]);
+				this.contacts.pastedAddress = "";
 				this.contacts.index = index; //转存INDEX
 				this.contacts.dialog = true; //显示弹层
 			},

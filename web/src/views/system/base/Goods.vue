@@ -49,6 +49,7 @@
 				<template v-if="$lib.getUserRoot(store.root,'base','batch')">
 					<el-button @click="batch.dialog=true" >批量</el-button>
 				</template>
+                <el-button v-if="$lib.getUserRoot(store.root,'base','edit')" :disabled="!tableSelection.length" @click="openPriceBatch">批量调价</el-button>
 				<el-button @click="toggleView">{{ viewMode ? '列表' : '视图' }}</el-button>
 				<el-button @click="togglePics">{{ picMode ? '隐藏图片' : '图片' }}</el-button>
 				<el-button @click="openQuotePage">查看报价表</el-button>
@@ -112,6 +113,29 @@
 		<el-pagination class="tablePagination" :current-page.sync="page.current" :total="page.total" :page-size.sync="page.size"
 		 :page-sizes="page.sizes" :pager-count="page.count" @size-change="record(1)" @current-change="record(0)" layout="prev,pager,next,jumper,sizes,total">
 		</el-pagination>
+        <el-dialog title="批量调价" :visible.sync="priceBatch.visible" width="900px" :close-on-click-modal="false" :close-on-press-escape="!priceBatch.loading" :show-close="!priceBatch.loading">
+          <p>已选 {{ priceBatch.rows.length }} 个商品，仅修改基础价格，辅助属性价格及历史单据不变。空白表示不修改，0 表示改为零。</p>
+          <el-checkbox v-model="priceBatch.buy">采购价</el-checkbox>
+          <el-checkbox v-model="priceBatch.sell">销售价</el-checkbox>
+          <el-select v-model="priceBatch.mode" size="small" style="width:150px;margin:0 12px">
+            <el-option label="逐项修改" value="manual"/><el-option label="统一价格" value="fixed"/><el-option label="增减金额" value="amount"/><el-option label="按比例调整(%)" value="percent"/>
+          </el-select>
+          <template v-if="priceBatch.mode!=='manual'">
+            <el-input v-if="priceBatch.buy" v-model="priceBatch.buyValue" size="small" :placeholder="priceBatch.mode==='fixed'?'采购价（元）':priceBatch.mode==='percent'?'采购价调整（%）':'采购价增减（元）'" style="width:170px;margin-right:8px"/>
+            <el-input v-if="priceBatch.sell" v-model="priceBatch.sellValue" size="small" :placeholder="priceBatch.mode==='fixed'?'销售价（元）':priceBatch.mode==='percent'?'销售价调整（%）':'销售价增减（元）'" style="width:170px;margin-right:8px"/>
+            <el-button size="small" @click="applyPriceBatch">应用并预览</el-button>
+          </template>
+          <p>支持从 Excel 复制两列新价格，在对应输入框粘贴；只粘贴一列时从当前列向下填充。</p>
+          <el-table :data="priceBatch.rows" max-height="420" border>
+            <el-table-column prop="number" label="商品编号" width="100"/>
+            <el-table-column prop="name" label="商品名称" min-width="160"/>
+            <el-table-column prop="old_buy" label="原采购价" width="100"/>
+            <el-table-column label="新采购价" width="130"><template slot-scope="scope"><el-input v-model="scope.row.buy" :disabled="!priceBatch.buy || priceBatch.loading" size="small" @paste.native="pastePrices($event,scope.$index,'buy')"/></template></el-table-column>
+            <el-table-column prop="old_sell" label="原销售价" width="100"/>
+            <el-table-column label="新销售价" width="130"><template slot-scope="scope"><el-input v-model="scope.row.sell" :disabled="!priceBatch.sell || priceBatch.loading" size="small" @paste.native="pastePrices($event,scope.$index,'sell')"/></template></el-table-column>
+          </el-table>
+          <span slot="footer"><el-button :disabled="priceBatch.loading" @click="priceBatch.visible=false">取消</el-button><el-button type="primary" :loading="priceBatch.loading" @click="savePriceBatch">确认修改</el-button></span>
+        </el-dialog>
 		<el-dialog class="tabsDialog" :visible.sync="dialog.show" title="详情" width="970px" v-madeDialog>
 			<transition name="el-fade-in">
 				<template v-if="dialog.show">
@@ -312,8 +336,14 @@
 							</el-tab-pane>
 							<el-tab-pane label="图文详情" name="details" class="formItemInitial">
 								<el-form-item label="商品图像">
+									<div class="uploadChannel">
+										<el-radio-group v-model="uploadChannel" size="mini">
+											<el-radio-button label="local">本地上传</el-radio-button>
+											<el-radio-button label="cos">COS云存储</el-radio-button>
+										</el-radio-group>
+									</div>
 									<el-upload
-										:action="$base.web+'goods/upload'"
+										:action="uploadAction"
 										:headers="{Token:$store.state.token}"
 										list-type="picture-card"
 										:limit="3"
@@ -429,6 +459,7 @@
 				},
 				picMode: false,
 				viewMode: false,
+				uploadChannel: "local",
 				dialog:{
 					show:false,
 					active:'base',
@@ -552,6 +583,7 @@
 						}
 					]
 				},
+				priceBatch:{visible:false,loading:false,rows:[],buy:true,sell:true,mode:"manual",buyValue:"",sellValue:""},
 				batch:{
 					dialog:false,
 					active:"import"
@@ -567,9 +599,72 @@
 			//读取数据中心
 			store() {
 				return this.$store.state;
+			},
+			//商品图像上传地址
+			uploadAction() {
+				return this.$base.web + (this.uploadChannel == "cos" ? "goods/uploadCos" : "goods/upload");
 			}
 		},
 		methods: {
+            openPriceBatch(){
+                const ids = new Set(this.tableSelection);
+                this.priceBatch.rows = this.tableData.filter(r=>ids.has(r.id)).map(r=>({id:r.id,number:r.number,name:r.name,old_buy:r.buy,old_sell:r.sell,buy:"",sell:""}));
+                this.priceBatch.mode="manual"; this.priceBatch.buyValue=""; this.priceBatch.sellValue=""; this.priceBatch.visible=true;
+            },
+            applyPriceBatch(){
+                const b=this.priceBatch, values={};
+                for(const f of ["buy","sell"]){
+                    const raw=String(b[f+"Value"]).trim();
+                    if(!b[f] || !raw)continue;
+                    if(!Number.isFinite(Number(raw)))return this.$message.warning("请输入正确的"+(f==="buy"?"采购价":"销售价")+"调价数值");
+                    values[f]=Number(raw);
+                }
+                if(!Object.keys(values).length)return this.$message.warning("请填写采购价或销售价的调价数值，空白项不修改");
+                const draft=b.rows.map(r=>{
+                    const out={};
+                    ["buy","sell"].forEach(f=>{if(Object.prototype.hasOwnProperty.call(values,f)){const v=values[f];const old=Number(r["old_"+f]);out[f]=(b.mode==="fixed"?v:b.mode==="amount"?old+v:old*(1+v/100)).toFixed(4);}});
+                    return out;
+                });
+                if(draft.some(r=>Object.values(r).some(v=>!/^\d{1,8}(?:\.\d{1,4})?$/.test(v))))return this.$message.warning("调整后价格超出范围或小于零，请检查");
+                draft.forEach((r,i)=>Object.assign(b.rows[i],r));
+            },
+            pastePrices(event,index,field){
+                const text=event.clipboardData.getData("text/plain");
+                if(!/[\t\r\n]/.test(text))return;
+                event.preventDefault();
+                const lines=text.replace(/\r/g,"").replace(/\n$/,"").split("\n");
+                if(index+lines.length>this.priceBatch.rows.length)return this.$message.warning("粘贴行数超过已选商品数量");
+                const changes=[];
+                lines.forEach((line,i)=>line.split("\t").forEach((value,j)=>{
+                    const target=field==="buy"?(j===0?"buy":j===1?"sell":null):(j===0?"sell":null);
+                    if(target&&this.priceBatch[target])changes.push({i:index+i,field:target,value:value.trim()});
+                }));
+                if(changes.some(c=>c.value&&!/^\d{1,8}(?:\.\d{1,4})?$/.test(c.value)))return this.$message.warning("粘贴价格格式不正确，最多4位小数");
+                changes.forEach(c=>{this.priceBatch.rows[c.i][c.field]=c.value;});
+            },
+            async savePriceBatch(){
+                const b=this.priceBatch;if(b.loading)return;
+                const rows=[];
+                for(const r of b.rows){
+                    const out={id:r.id};
+                    for(const f of ["buy","sell"]){
+                        if(!b[f] || String(r[f]).trim()==="")continue;
+                        if(!/^\d{1,8}(?:\.\d{1,4})?$/.test(String(r[f]).trim()))return this.$message.warning("商品 "+r.number+" 的价格格式不正确");
+                        out[f]=String(r[f]).trim();out["old_"+f]=r["old_"+f];
+                    }
+                    if(Object.keys(out).length>1)rows.push(out);
+                }
+                if(!rows.length)return this.$message.warning("请填写需要修改的价格");
+                b.loading=true;
+                try{
+                    await this.$confirm("确认提交以上 "+rows.length+" 个商品的价格修改？","确认调价",{type:"warning"});
+                    const result=await this.$axios.post("goods/batchPrice",{rows});
+                    if(result.state!=="success")return this.$message.error(result.info||"保存失败");
+                    this.$message.success("已修改 "+result.info+" 个商品");b.visible=false;this.record(0);
+                }catch(error){if(error!=="cancel"&&error!=="close")this.$message.error("提交失败，请重试");}
+                finally{b.loading=false;}
+            },
+
 			toggleView(){
 				this.viewMode=!this.viewMode;
 				this.viewMode && (this.picMode=false);
@@ -1030,6 +1125,13 @@
 			//商品图像上传成功
 			uploadSuccess(result, file, fileList) {
 				if (result.state == 'success') {
+					//COS上传失败时已自动回退本地存储
+					if (this.uploadChannel == "cos" && result.channel == "local") {
+						this.$message({
+							type: "warning",
+							message: "[ " + file.name + " ] COS上传失败,已回退到本地上传!"
+						});
+					}
 					this.form.imgs.push({
 						name: file.name,
 						url: result.info
@@ -1153,6 +1255,10 @@
 	.layout {
 		display: flex;
 		justify-content: space-between;
+	}
+	.uploadChannel{
+		width: 100%;
+		margin-bottom: 8px;
 	}
 	.viewWrap{
 		height: calc(100% - 90px);

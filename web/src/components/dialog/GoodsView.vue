@@ -90,6 +90,16 @@
               :treeData="store.category"
               placeholder="商品类别"
             ></nodTree>
+            <el-select
+              class="toolbarItem"
+              v-model="searchFrom.brand"
+              placeholder="全部品牌"
+              filterable
+              clearable
+              @change="record(1)"
+            >
+              <el-option v-for="brand in store.sys.brand" :key="brand" :label="brand" :value="brand" />
+            </el-select>
             <el-button class="toolbarItem" type="primary" @click="record(1)">搜索</el-button>
             <el-button class="toolbarItem" @click="pickAll">一键选择</el-button>
           </div>
@@ -195,6 +205,7 @@ export default {
       searchFrom: {
         mate: "",
         data: "",
+        brand: "",
         category: []
       },
       batchNums: "",
@@ -690,9 +701,13 @@ export default {
   gap: 10px;
   align-items: center;
   padding-bottom: 10px;
+  flex-wrap: wrap;
 }
 .toolbarItem {
-  width: 220px;
+  flex: 1 1 135px;
+  min-width: 0;
+  max-width: 220px;
+  margin-left: 0;
 }
 .gridWrap {
   flex: 1;

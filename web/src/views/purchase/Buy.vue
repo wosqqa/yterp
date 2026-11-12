@@ -33,7 +33,14 @@
           placeholder="请输入单据编号"
           v-model="form.number"
           clearable
-        ></el-input>
+        >
+          <template
+            slot="append"
+            v-if="form.id != 0 && $lib.getUserRoot(store.root, 'buy', 'add')"
+          >
+            <el-button icon="el-icon-document-copy" @click="copyAsNew"></el-button>
+          </template>
+        </el-input>
         <el-button size="mini" style="margin-left: 8px" @click="sortGridByCategory">
           分类排序
         </el-button>
@@ -818,6 +825,73 @@ export default {
       this.$grid.addGridRow(this.grid.options);
       this.handleGrid();
       this.goodsViewValue = this.getGoodsViewSelected();
+    },
+    copyAsNew() {
+      const options = this.grid && this.grid.options ? this.grid.options : null;
+      const api = options ? options.api : null;
+      api && api.stopEditing && api.stopEditing();
+
+      const effect = this.handleGrid();
+      if (effect !== true) {
+        this.$message({ type: "warning", message: effect });
+        return;
+      }
+
+      const rows = this.$grid.getGridData(options).filter((r) => r && r.key != null);
+      if (rows.length === 0) {
+        this.$message({ type: "warning", message: "商品信息不可为空!" });
+        return;
+      }
+
+      const preserve = {
+        actual: this.form.actual,
+        money: this.form.money,
+        account: this.form.account,
+        people: this.form.people,
+        logistics: this.$lib.extend(true, {}, this.form.logistics),
+        cost: this.$lib.extend(true, [], this.cost || []),
+      };
+      const nextNumber = "CGD" + this.$moment().format("YYMMDDHHmmssS");
+      const nextTime = this.form.time || this.$moment().format("YYYY-MM-DD");
+      const nextSupplier = this.form.supplier != null ? this.form.supplier : null;
+
+      this.$set(this, "form", {
+        id: 0,
+        source: 0,
+        supplier: nextSupplier,
+        time: nextTime,
+        number: nextNumber,
+        total: 0,
+        actual: preserve.actual,
+        money: preserve.money,
+        cost: 0,
+        account: preserve.account,
+        people: preserve.people,
+        logistics: preserve.logistics,
+        file: [],
+        data: "",
+        examine: 0,
+        check: 0,
+        more: {},
+      });
+      this.$set(this, "cost", preserve.cost);
+
+      const nextRows = rows.map((r) => {
+        const row = Object.assign({}, r);
+        row.uniqid = this.$lib.getUniqid();
+        row.source = 0;
+        row.serial = [];
+        row.retreat = 0;
+        return row;
+      });
+
+      api.setRowData(nextRows);
+      this.$grid.addGridRow(options);
+      this.handleGrid();
+      this.$message({
+        type: "success",
+        message: "已复制商品到新单,新单编号: " + nextNumber,
+      });
     },
     //初始化
     init() {

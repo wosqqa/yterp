@@ -689,46 +689,7 @@ class Service extends Acl {
 
         $tmpFiles=[];
         $fetchImageToTemp=function($url) use (&$tmpFiles){
-            $u=trim(strval($url));
-            if($u=='' || !preg_match('/^https?:\/\//i',$u)) return null;
-            $maxBytes=2*1024*1024;
-            $bin=null;
-            $contentType='';
-            if(function_exists('curl_init')){
-                $ch=curl_init();
-                curl_setopt($ch,CURLOPT_URL,$u);
-                curl_setopt($ch,CURLOPT_RETURNTRANSFER,true);
-                curl_setopt($ch,CURLOPT_FOLLOWLOCATION,true);
-                curl_setopt($ch,CURLOPT_MAXREDIRS,3);
-                curl_setopt($ch,CURLOPT_CONNECTTIMEOUT,3);
-                curl_setopt($ch,CURLOPT_TIMEOUT,8);
-                curl_setopt($ch,CURLOPT_SSL_VERIFYPEER,false);
-                curl_setopt($ch,CURLOPT_SSL_VERIFYHOST,false);
-                $data=curl_exec($ch);
-                $contentType=strval(curl_getinfo($ch,CURLINFO_CONTENT_TYPE));
-                $code=intval(curl_getinfo($ch,CURLINFO_RESPONSE_CODE));
-                curl_close($ch);
-                if($code>=200 && $code<300 && is_string($data) && strlen($data)>0 && strlen($data)<=$maxBytes){
-                    $bin=$data;
-                }
-            }else{
-                $ctx=stream_context_create(['http'=>['timeout'=>8]]);
-                $data=@file_get_contents($u,false,$ctx);
-                if(is_string($data) && strlen($data)>0 && strlen($data)<=$maxBytes){
-                    $bin=$data;
-                }
-            }
-            if($bin===null) return null;
-            $ext='jpeg';
-            if(preg_match('/png/i',$contentType) || preg_match('/\.png(\?|$)/i',$u)) $ext='png';
-            $base=tempnam(sys_get_temp_dir(),'xlsximg_');
-            if($base===false) return null;
-            @unlink($base);
-            $path=$base.'.'.$ext;
-            $ok=@file_put_contents($path,$bin);
-            if($ok===false) return null;
-            $tmpFiles[]=$path;
-            return $path;
+            return fetchImageToTempFile($url, $tmpFiles);
         };
 
         try{

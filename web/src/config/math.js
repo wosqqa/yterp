@@ -3,10 +3,11 @@ import {create,all} from 'mathjs';
 const math = create(all);
 //链式运算
 const calc={
-	//入口方法
+	//入口方法：每次返回独立的计算实例，避免嵌套计算共用 base 互相覆盖
 	chain(number){
-		this.base=math.bignumber(number);
-		return this;
+		const instance=Object.create(calc);
+		instance.base=math.bignumber(number);
+		return instance;
 	},
 	//加法运算
 	add(number){

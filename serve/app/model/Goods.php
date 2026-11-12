@@ -5,7 +5,6 @@ class Goods extends Model{
     //商品
     
     protected $type = [
-        'imgs' => 'json',
         'units' => 'json',
         'strategy' => 'json',
         'serial' => 'boolean',
@@ -13,6 +12,17 @@ class Goods extends Model{
         'validity' => 'boolean'
     ];
     
+    // 读取时提供缩略图；保存时还原原图地址，避免编辑回传污染数据库。
+    public function getImgsAttr($value)
+    {
+        return \app\support\ProductImage::images($value);
+    }
+
+    public function setImgsAttr($value)
+    {
+        return json_encode(\app\support\ProductImage::images($value, false), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
     //商品类别关联
     public function categoryData(){
         return $this->hasOne(Category::class,'id','category');

@@ -48,6 +48,7 @@
           width="100px"
         ></el-table-column>
       </el-table>
+      <div class="paginationRow">
       <el-pagination
         class="tablePagination"
         :current-page.sync="page.current"
@@ -60,6 +61,8 @@
         layout="prev,pager,next,jumper,sizes,total"
       >
       </el-pagination>
+      <div class="sumNums">总数量: <span>{{ pageSumNums }}</span></div>
+      </div>
       </div>
       <span slot="footer" class="dialog-footer">
         <el-popover
@@ -165,6 +168,12 @@ export default {
     store() {
       return this.$store.state;
     },
+    pageSumNums() {
+      return this.tableData.reduce((sum, row) => {
+        const value = parseFloat(String(row && row.nums != null ? row.nums : 0).replace(/,/g, ""));
+        return sum + (Number.isFinite(value) ? value : 0);
+      }, 0);
+    },
   },
   methods: {
     //表格自适应布局
@@ -236,9 +245,25 @@ export default {
   flex-direction: column;
   min-height: 0;
 }
-.stockDetailBody .tablePagination {
+.stockDetailBody .paginationRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-top: 10px;
   padding: 4px 2px 0 2px;
+}
+.stockDetailBody .tablePagination {
+  flex: 1;
+}
+.stockDetailBody .sumNums {
+  font-size: 14px;
+  font-weight: 700;
+  color: #d40000;
+  white-space: nowrap;
+  margin-left: 16px;
+}
+.stockDetailBody .sumNums span {
+  color: #303133;
 }
 </style>
 

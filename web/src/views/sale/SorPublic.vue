@@ -297,7 +297,15 @@
             <div v-if="headerMode !== 'invoice'" class="summary hideAmountsUi" :class="{ hideFooterUi: hideFooter }">
               <div class="sumLeft">
                 <div class="sumTitle">NOTE：</div>
-                <div class="sumNote">{{ noteText }}</div>
+                <div class="sumNoteWrap">
+                  <textarea
+                    class="sumNoteInput sumNoteInputScreen"
+                    rows="3"
+                    v-model="noteManual"
+                    placeholder="在这里输入备注（打印时会显示）..."
+                  ></textarea>
+                  <div class="sumNoteStaticPrint">{{ noteText }}</div>
+                </div>
               </div>
               <div class="sumRight">
                 <div class="sumRow">
@@ -328,9 +336,15 @@ function getApiBase() {
   try {
     if (typeof window !== "undefined" && window.location) {
       const host = window.location.host;
+      const hostname = (window.location.hostname || "").toLowerCase();
       const protocol = window.location.protocol || "http:";
       const port = window.location.port || "";
-      if (String(port) === "8084") return "http://erp.51ppy.com/";
+      const portNum = port ? Number(port) : 0;
+      const isLocalHost = hostname === "127.0.0.1" || hostname === "localhost" || hostname === "localhost.localdomain";
+      const isFrontendDevPort = portNum >= 8080 && portNum <= 8099;
+      if (portNum === 8084 || (isLocalHost && isFrontendDevPort)) {
+        return "http://erp.51ppy.com/";
+      }
       return `${protocol}//${host}/`;
     }
   } catch (e) {}
@@ -505,6 +519,7 @@ export default {
       exchangeRateManual: "6.85",
       freightManual: 30,
       depositManual: 0,
+      noteManual: "",
       imgQtyHidden: false,
       unitPriceHidden: false,
       hideWarehouse2: false,
@@ -995,7 +1010,8 @@ export default {
       return this.formatMeasure(this.totalVolumeVal);
     },
     noteText() {
-      return this.classData && this.classData.data != null ? String(this.classData.data).trim() : "";
+      const raw = (this.noteManual != null && this.noteManual !== undefined) ? String(this.noteManual) : "";
+      return raw;
     },
     freightVal() {
       const n = Number(String(this.freightManual).replace(/,/g, ""));
@@ -1040,6 +1056,9 @@ export default {
           this.initRowOverridesFromRows(this.rows);
         });
       }
+    },
+    noteManual: {
+      handler() { this.persistInvoiceDraftDebounced(); }
     }
   },
   methods: {
@@ -1123,6 +1142,30 @@ export default {
       this.invoiceTotalText = this.getDefaultInvoiceTotalText();
       if (!wordsText) this.invoiceWordsText = this.getDefaultInvoiceWordsText();
       if (!bankText) this.invoiceBankText = this.getDefaultInvoiceBankText();
+    },
+    getInvoiceKey(suffix) {
+      const orderKey = String(this.activeOrderId || "__global__").replace(/\s+/g, "_");
+      return "sor_public_invoice_" + orderKey + "_" + String(suffix || "");
+    },
+    loadInvoiceDraft() {
+      try {
+        const noteRaw = localStorage.getItem(this.getInvoiceKey("note"));
+        if (noteRaw != null) this.noteManual = String(noteRaw);
+      } catch (e) {
+        this.noteManual = "";
+      }
+    },
+    persistInvoiceDraft() {
+      try {
+        localStorage.setItem(this.getInvoiceKey("note"), this.noteManual != null ? String(this.noteManual) : "");
+      } catch (e) {}
+    },
+    persistInvoiceDraftDebounced() {
+      const t = this.__invoiceDraftTimer;
+      if (t) clearTimeout(t);
+      this.__invoiceDraftTimer = setTimeout(() => {
+        this.persistInvoiceDraft();
+      }, 220);
     },
     escapeHtml(val) {
       const s = val == null ? "" : String(val);
@@ -1269,61 +1312,67 @@ export default {
         };
       });
 
-      let apiBase = "";
-      try { apiBase = (typeof getApiBase === "function") ? (getApiBase() || "") : ""; } catch(e){}
-      if (apiBase && !apiBase.endsWith("/")) apiBase = apiBase + "/";
-      const exportUrl = apiBase + "open/exportXlsx";
-      const postData = {
-        template: "sorPrint",
-        fileName,
-        sheetName: "Order",
-        payload: {
-          groupBy: this.groupBy,
-          onlyWarehouseId: this.onlyWarehouseId,
-          onlyThreeCols: !!this.onlyThreeCols,
-          hideUsd: !!this.hideUsd,
-          hideFooter: !!this.hideFooter,
-          exchangeRate: this.exchangeRate,
-          customerName: this.customerName || "",
-          customerAdd: this.customerAdd || "",
-          customerMark: this.customerMark || "",
-          orderDate: this.orderDateDisplay || "",
-          deliveryDate: this.deliveryDateDisplay || "",
-          number: this.classData.number || "",
-          freight: this.freightVal,
-          deposit: this.depositVal,
-          totalWeight: this.totalWeightVal,
-          totalVolume: this.totalVolumeVal,
-          noteText: this.noteText,
-          totalQty: this.totalQty,
-          totalRmb: this.totalRmbVal,
-          totalUsd: this.exchangeRate ? Number(this.totalRmbVal / this.exchangeRate) : 0,
-          totalWithFreight: this.totalWithFreightVal,
-          balance: this.balanceVal,
-          hideAmounts: !!this.hideAmounts,
-          rows
-        }
-      };
-      fetch(exportUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(postData)
-      }).then(res => {
-        const ok = res && res.ok;
-        const isXlsx = res && /(excel|spreadsheet|octet-stream|xlsx|xls)/i.test(res.headers && res.headers.get("content-type") || "");
-        if (ok && isXlsx) return res.blob();
-        return res.text().then(txt => {
-          try {
-            const obj = txt && /^\s*\{/.test(txt) ? JSON.parse(txt) : null;
-            const info = (obj && (obj.info || obj.message || obj.error)) || txt || "导出失败";
-            throw new Error(String(info).replace(/^<[^>]+>/g, "").slice(0, 400));
-          } catch (e) {
-            if (e && /^Error: /i.test(String(e))) throw e;
-            throw new Error((txt || "导出失败").slice(0, 400));
+      publicAxios({
+        url: "open/exportXlsx",
+        method: "post",
+        responseType: "blob",
+        data: {
+          template: "sorPrint",
+          fileName,
+          sheetName: "Order",
+          payload: {
+            groupBy: this.groupBy,
+            onlyWarehouseId: this.onlyWarehouseId,
+            onlyThreeCols: !!this.onlyThreeCols,
+            hideUsd: !!this.hideUsd,
+            hideFooter: !!this.hideFooter,
+            exchangeRate: this.exchangeRate,
+            customerName: this.customerName || "",
+            customerAdd: this.customerAdd || "",
+            customerMark: this.customerMark || "",
+            orderDate: this.orderDateDisplay || "",
+            deliveryDate: this.deliveryDateDisplay || "",
+            number: this.classData.number || "",
+            freight: this.freightVal,
+            deposit: this.depositVal,
+            totalWeight: this.totalWeightVal,
+            totalVolume: this.totalVolumeVal,
+            noteText: this.noteText,
+            totalQty: this.totalQty,
+            totalRmb: this.totalRmbVal,
+            totalUsd: this.exchangeRate ? Number(this.totalRmbVal / this.exchangeRate) : 0,
+            totalWithFreight: this.totalWithFreightVal,
+            balance: this.balanceVal,
+            hideAmounts: !!this.hideAmounts,
+            rows
           }
-        });
+        }
       }).then(blob => {
-        if (!blob) return;
+        if (blob == null) throw new Error("导出失败");
+        if (blob && typeof blob === "object" && blob.state === "error") {
+          throw new Error(blob.info || "导出失败");
+        }
+        if (blob && typeof blob === "object" && blob.type && /application\/json/i.test(blob.type)) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            try {
+              const obj = JSON.parse(String(reader.result || "{}"));
+              alert("导出失败：" + (obj && obj.info ? obj.info : "导出失败"));
+            } catch (e) {
+              alert("导出失败");
+            }
+          };
+          reader.onerror = () => alert("导出失败");
+          reader.readAsText(blob);
+          return;
+        }
+        if (!(blob instanceof Blob)) {
+          try {
+            blob = new Blob([blob]);
+          } catch (e) {
+            throw new Error("导出失败：" + (e && e.message ? e.message : String(e)));
+          }
+        }
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.style.display = "none";
@@ -1335,7 +1384,8 @@ export default {
         window.URL.revokeObjectURL(url);
       }).catch(err => {
         console.error(err);
-        alert("导出失败：" + (err && err.message ? err.message : String(err)));
+        const msg = err && err.message ? err.message : String(err);
+        alert("导出失败：" + msg);
       });
     },
     toggleImgQty() {
@@ -1504,6 +1554,7 @@ export default {
                 } else {
                   this.resetSellerInfoToDefaults();
                 }
+                this.loadInvoiceDraft();
                 this.ensureInvoiceDefaults();
                 this.loading = false;
                 this.loaded = true;
@@ -2351,10 +2402,17 @@ function sortNumStr(a, b) {
 }
 .table {
   border-bottom: 1px solid #333;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 900px;
 }
 .tr {
   display: flex;
   border-top: 1px solid #333;
+  flex-wrap: nowrap;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 900px;
 }
 .tr:first-child {
   border-top: 0;
@@ -2368,6 +2426,9 @@ function sortNumStr(a, b) {
   justify-content: center;
   text-align: center;
   box-sizing: border-box;
+  flex-shrink: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 .td:last-child {
   border-right: 0;
@@ -2387,6 +2448,7 @@ function sortNumStr(a, b) {
   flex: 0 0 70px;
   font-size: 25px;
   font-weight: 700;
+  min-width: 70px;
 }
 .noCopyable {
   cursor: pointer;
@@ -2422,18 +2484,22 @@ function sortNumStr(a, b) {
 .desc {
   width: 130px;
   flex: 0 0 130px;
+  min-width: 130px;
 }
 .pic {
   width: 250px;
   flex: 0 0 250px;
+  min-width: 250px;
 }
 .qty {
   width: 80px;
   flex: 0 0 80px;
+  min-width: 80px;
 }
 .price {
   width: 80px;
   flex: 0 0 80px;
+  min-width: 80px;
 }
 .td.price .uPriceCell {
   width: 100%;
@@ -2446,10 +2512,13 @@ function sortNumStr(a, b) {
 .amount {
   width: 100px;
   flex: 0 0 100px;
+  min-width: 100px;
 }
 .usd {
-  width: 90px;
-  flex: 0 0 90px;
+  width: 100px;
+  flex: 0 0 100px;
+  min-width: 100px;
+  max-width: 100px;
 }
 .exchangeRateCell {
   display: flex;
@@ -2457,11 +2526,16 @@ function sortNumStr(a, b) {
   justify-content: flex-end;
   gap: 0;
   flex-wrap: nowrap;
+  width: 100%;
+  overflow: hidden;
+  min-width: 0;
+  padding: 2px 2px;
 }
 .exchangeRatePrefix {
   color: inherit;
   font-weight: inherit;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 .exchangeRateStaticPrint {
   display: none;
@@ -2471,6 +2545,9 @@ function sortNumStr(a, b) {
 }
 .exchangeRateInput {
   width: 58px;
+  min-width: 58px;
+  max-width: 58px;
+  flex-shrink: 0;
 }
 .exchangeRateInput >>> .el-input__inner {
   text-align: left;
@@ -2495,7 +2572,8 @@ function sortNumStr(a, b) {
 @media print {
   .exchangeRateInputScreen,
   .exchangeRatePrefixScreen,
-  .uPriceInputScreen {
+  .uPriceInputScreen,
+  .sumNoteInputScreen {
     display: none !important;
   }
   .exchangeRateStaticPrint {
@@ -2505,6 +2583,9 @@ function sortNumStr(a, b) {
     display: inline-block !important;
     width: 100%;
     text-align: center;
+  }
+  .sumNoteStaticPrint {
+    display: block !important;
   }
 }
 .uPriceStaticPrint {
@@ -2537,9 +2618,29 @@ function sortNumStr(a, b) {
   border-radius: 3px;
   background: #fff;
 }
+.sumNoteWrap { position: relative; width: 100%; }
+.sumNoteInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #303133;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: vertical;
+  min-height: 60px;
+}
+.sumNoteInput:focus {
+  background: #fff;
+}
+.sumNoteStaticPrint { display: none; white-space: pre-wrap; word-break: break-word; }
 .metric {
   width: 90px;
   flex: 0 0 90px;
+  min-width: 90px;
 }
 .big {
   font-size: 14px;
