@@ -10,7 +10,7 @@ version="${2:-}"
 [[ "$version" =~ ^[a-f0-9]{40}$ ]] || { echo '版本号必须为提交 SHA'; exit 1; }
 work="$base/staging/$version"
 backup="$base/backups/$version-$(date +%s)"
-exclude=(--exclude=/.env --exclude=/vendor/ --exclude=/runtime/ --exclude=/static/upload/ --exclude=/static/file/ --exclude=/static/backup/)
+exclude=(--exclude=/.env --exclude=/config/database.php --exclude=/vendor/ --exclude=/runtime/ --exclude=/static/upload/ --exclude=/static/file/ --exclude=/static/backup/)
 if [ "${1:-}" != deploy ]; then echo '用法 deploy SHA ARCHIVE'; exit 1; fi
 [ -d "$site" ] && [ -f "$site/.env" ] && [ -f "$site/vendor/autoload.php" ]
 [ ! -e "$work" ] || { echo '暂存目录已存在，需检查前次发布'; exit 1; }
