@@ -2,7 +2,6 @@ name: Publish ERP production
 on:
   push:
     branches: [master]
-    paths-ignore: ['**.md']
   workflow_dispatch:
 permissions:
   contents: read
