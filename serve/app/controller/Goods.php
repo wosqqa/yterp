@@ -315,14 +315,6 @@ class Goods extends Acl {
                     }
                     $sql[]=$record;//加入SQL
                 }
-                //判断名称重复
-                $nameColumn=array_column($sql,'name');
-                $nameUnique=array_unique($nameColumn);
-                $nameDiff=array_diff_assoc($nameColumn,$nameUnique);
-                if(!empty($nameDiff)){
-                    //返回错误信息
-                    return json(['state'=>'error','info'=>'模板文件商品名称[ '.implode(' | ',$nameDiff).' ]重复!']);
-                }
                 //判断编号重复
                 $numberColumn=array_column($sql,'number');
                 $numberUnique=array_unique($numberColumn);

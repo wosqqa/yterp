@@ -5,7 +5,7 @@ class Goods extends Validate {
     
     //常规验证规则
     protected $rule = [
-        'name' => ['require','unique:goods'],
+        'name' => ['require'],
         'number' => ['require','unique:goods'],
         'category' => ['require','integer'],
         'buy' => ['require','float'],
@@ -24,7 +24,6 @@ class Goods extends Validate {
     //常规规则提示
     protected $message = [
         'name.require' => '商品名称不可为空!',
-        'name.unique' => '商品名称重复!',
         'number.require' => '商品编号不可为空!',
         'number.unique' => '商品编号重复!',
         'category.require' => '商品分类不可为空!',
