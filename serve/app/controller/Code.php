@@ -111,7 +111,7 @@ class Code extends Acl {
 					$record=[
 						'name'=>$dataVo['A'],
 						'info'=>$dataVo['B'],
-						'type'=>$dataVo['C']=="条形码"?0:1,
+						'type'=>['条形码'=>0,'二维码'=>1,'链接'=>2][$dataVo['C']] ?? -1,
 						'data'=>$dataVo['D']
 					];
                     //数据合法性验证

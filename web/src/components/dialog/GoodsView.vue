@@ -164,6 +164,52 @@
         </div>
       </div>
     </el-dialog>
+    <el-dialog :title="'组合商品 · ' + combo.text" :visible.sync="combo.visible" width="900px" top="5vh" custom-class="adminComboDialog" append-to-body :close-on-click-modal="false" @close="closeCombo">
+      <div v-if="combo.loading" class="comboStatus">正在加载组合商品…</div>
+      <div v-else-if="combo.error" class="comboStatus">{{ combo.error }} <el-button type="text" @click="recordComboOnly(combo.text, combo.page)">重试</el-button></div>
+      <div v-else-if="!combo.products.length" class="comboStatus">暂无组合商品</div>
+      <div v-else class="goodsGrid">
+              <div
+                v-for="item in combo.products"
+                :key="item.id"
+                class="goodsCard"
+              >
+                <div
+                  class="cardImg"
+                  @click.stop="onCardImgClick(item)"
+                  @mousedown.middle.prevent.stop="onCardImgMiddleClick(item)"
+                >
+                  <button
+                    v-if="pickedQty(item.id) > 0"
+                    class="cardMinusBtn"
+                    type="button"
+                    @click.stop="decrementPicked(item)"
+                  >
+                    <i class="el-icon-minus"></i>
+                  </button>
+                  <el-image v-if="getImgUrl(item)" :src="getImgUrl(item)" fit="contain">
+                    <div slot="error" class="imgError">
+                      <i class="el-icon-picture-outline"></i>
+                    </div>
+                  </el-image>
+                  <div v-else class="imgError">
+                    <i class="el-icon-picture-outline"></i>
+                  </div>
+                </div>
+                <div class="cardMeta" >
+                  <span class="metaLeft">{{ item.number }}</span>
+                  <span class="metaRight">{{ item.sell }}</span>
+                </div>
+                <div v-if="pickedQty(item.id) > 0" class="pickedMask">已选{{ pickedQty(item.id) }}</div>
+              </div>
+      </div>
+      <div slot="footer" class="comboFooter">
+        <el-pagination :current-page="combo.page" :page-size="60" :total="combo.total" layout="prev,pager,next,total" @current-change="recordComboOnly(combo.text, $event)" />
+        <span>已选数量：{{ selectedTotalQty }}</span>
+        <el-button :disabled="combo.loading || !!combo.error" @click="pickComboAll">选择本页组合</el-button>
+        <el-button type="primary" @click="combo.visible = false">返回原列表</el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 <script>
@@ -194,6 +240,8 @@ export default {
   data() {
     return {
       dialog: true,
+      combo: { visible: false, text: "", products: [], loading: false, error: "", page: 1, total: 0 },
+      comboRequestId: 0,
       tableData: [],
       page: {
         current: 1,
@@ -247,6 +295,9 @@ export default {
       }
     }
   },
+  beforeDestroy() {
+    this.closeCombo();
+  },
   computed: {
     store() {
       return this.$store.state;
@@ -296,11 +347,11 @@ export default {
         this.lastComboClickAt = Date.now();
         return;
       }
-      this.searchFrom = Object.assign({}, this.searchFrom, { data: text });
+      this.combo.text = text;
+      this.combo.products = [];
+      this.combo.total = 0;
+      this.combo.visible = true;
       this.lastComboClickAt = Date.now();
-      this.$nextTick(() => {
-        this.$refs.comboInput && this.$refs.comboInput.focus && this.$refs.comboInput.focus();
-      });
       this.recordComboOnly(text);
     },
     normalizeSelectedLine(item, fallbackLineId) {
@@ -440,12 +491,16 @@ export default {
         }
       });
     },
-    recordComboOnly(dataText) {
+    recordComboOnly(dataText, page = 1) {
       const text = dataText != null ? String(dataText).trim() : "";
       if (!text) return;
-      this.page.current = 1;
-      const parm = { page: 1, limit: this.page.size, data: text };
-      this.$axios.post(this.recordAction, parm).then(result => {
+      const requestId = ++this.comboRequestId;
+      this.combo.page = page;
+      this.combo.loading = true;
+      this.combo.error = "";
+      const parm = { page, limit: 60, data: text, brand: this.searchFrom.brand || "" };
+      return this.$axios.post(this.recordAction, parm).then(result => {
+        if (requestId !== this.comboRequestId || !this.combo.visible) return;
         if (result.state == "success") {
           for (let item of result.info) {
             item.nums = "";
@@ -470,14 +525,25 @@ export default {
             if (c2 !== 0) return c2;
             return (Number(b && b.id) || 0) - (Number(a && a.id) || 0);
           });
-          this.tableData = list;
-          this.page.total = result.count;
+          this.combo.products = list;
+          this.combo.total = Number(result.count) || 0;
         } else if (result.state == "error") {
-          this.$message({ type: "warning", message: result.info });
+          this.combo.error = result.info || "组合商品加载失败";
         } else {
-          this.$message({ type: "error", message: "[ ERROR ] 服务器响应超时!" });
+          this.combo.error = "组合商品加载失败，请重试";
         }
+      }).catch(() => {
+        if (requestId === this.comboRequestId) this.combo.error = "组合商品加载失败，请重试";
+      }).finally(() => {
+        if (requestId === this.comboRequestId) this.combo.loading = false;
       });
+    },
+    closeCombo() {
+      this.comboRequestId++;
+      this.combo.loading = false;
+    },
+    pickComboAll() {
+      this.combo.products.forEach(item => this.pickOnce(item));
     },
     findLastIndexByGoodsId(id) {
       const gid = Number(id);
@@ -852,4 +918,11 @@ export default {
   margin-left: 0;
   margin-top: 4px;
 }
+</style>
+
+<style>
+.adminComboDialog { max-width: calc(100vw - 24px); }
+.adminComboDialog .el-dialog__body { max-height: 65vh; overflow-y: auto; overscroll-behavior: contain; }
+.adminComboDialog .comboFooter { display: flex; justify-content: flex-end; align-items: center; gap: 12px; flex-wrap: wrap; }
+.adminComboDialog .comboStatus { text-align: center; padding: 30px; }
 </style>

@@ -8,7 +8,7 @@ class Code extends Model{
 	public function getExtensionAttr($val,$data){
         $source=[];
         //条码类型
-        $source['type']=[0=>'条形码',1=>'二维码'][$data['type']];
+        $source['type']=([0=>'条形码',1=>'二维码',2=>'链接'][$data['type']] ?? '未知类型');
         return $source;
 	}
 }

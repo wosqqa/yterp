@@ -233,6 +233,81 @@
     </div>
 
     <el-dialog
+      :title="'Product Set · ' + setDialog.code"
+      :visible.sync="setDialog.visible"
+      custom-class="publicSetDialog"
+      :fullscreen="isCompactLayout"
+      width="900px"
+      :close-on-click-modal="false"
+      append-to-body
+      @close="closeSetDialog"
+    >
+      <div v-if="setDialog.loading" class="emptyState" role="status"><i class="el-icon-loading"></i> Loading set...</div>
+      <div v-else-if="setDialog.error" class="emptyState" role="alert">
+        {{ setDialog.error }} <button type="button" class="retryBtn" @click="loadSetProducts(setDialog.page)">Retry</button>
+      </div>
+      <div v-else-if="!setDialog.products.length" class="emptyState">No matching products in this set.</div>
+      <div v-else class="goodsGrid setGoodsGrid">
+              <div
+                v-for="item in setDialog.products"
+                :key="item.id"
+                class="goodsCard"
+                :class="{ active: pickedQty(item.id) > 0 }"
+              >
+                <button type="button" class="cardImageWrap" :aria-label="'Add ' + item.code" @click="addProduct(item)">
+                  <el-image
+                    v-if="item.image"
+                    :src="item.image"
+                    fit="contain"
+                    class="cardImage"
+                  >
+                    <span slot="error" class="imageError">Image unavailable</span>
+                  </el-image>
+                  <span v-else class="imageError">Image unavailable</span>
+                </button>
+                <div class="cardMeta">
+                  <div class="codeRow">
+                    <span class="codeText">{{ item.code }}</span>
+                    <span class="priceText">{{ formatUsd(item.price) }}</span>
+                  </div>
+                </div>
+                <div class="cardActions">
+                  <div v-if="pickedQty(item.id)" class="qtyStepper cardQtyStepper">
+                    <button type="button" :aria-label="'Decrease ' + item.code" @click="decreaseProduct(item)">-</button>
+                    <input
+                      :value="qtyDraftValue(item.id)"
+                      class="qtyInput"
+                      inputmode="numeric"
+                      pattern="[0-9]*"
+                      :aria-label="'Quantity for ' + item.code"
+                      @focus="$event.target.select()"
+                      @input="handleQtyDraftInput(item, $event.target.value)"
+                      @blur="commitQtyDraft(item)"
+                      @keyup.enter="$event.target.blur()"
+                    >
+                    <button type="button" :aria-label="'Increase ' + item.code" @click="addProduct(item)">+</button>
+                  </div>
+                  <template v-else>
+
+                    <button type="button" class="addBtn" :aria-label="'Add ' + item.code" @click="addProduct(item)">
+                      <i class="el-icon-plus"></i>
+                    </button>
+                  </template>
+                </div>
+              </div>
+      </div>
+      <div slot="footer" class="setDialogFooter">
+        <div class="setDialogPagination" v-if="setDialog.count > 60">
+          <el-button size="small" :disabled="setDialog.loading || setDialog.page <= 1" @click="loadSetProducts(setDialog.page - 1)">Previous</el-button>
+          <span>{{ setDialog.page }} / {{ Math.max(1, Math.ceil(setDialog.count / 60)) }}</span>
+          <el-button size="small" :disabled="setDialog.loading || setDialog.page * 60 >= setDialog.count" @click="loadSetProducts(setDialog.page + 1)">Next</el-button>
+        </div>
+        <span>Selected Qty: {{ selectedTotalQty }}</span>
+        <el-button type="primary" @click="setDialog.visible = false">Continue browsing</el-button>
+      </div>
+    </el-dialog>
+
+    <el-dialog
       title="Confirm Your Order"
       :visible.sync="submitDialogVisible"
       custom-class="publicSelectionDialog"
@@ -317,6 +392,8 @@ export default {
       selectedPanelOpen: false,
       viewportWidth: typeof window !== "undefined" ? window.innerWidth : 1440,
       products: [],
+      setDialog: { visible: false, loading: false, error: "", products: [], source: 0, code: "", page: 1, count: 0 },
+      setRequestId: 0,
       submitDialogVisible: false,
       successDialogVisible: false,
       submitLoading: false,
@@ -337,6 +414,8 @@ export default {
   },
   watch: {
     "$route.query.brand"() {
+      this.setDialog.visible = false;
+      this.closeSetDialog();
       this.selectedMap = {};
       this.qtyDrafts = {};
       this.clearFilters();
@@ -406,6 +485,7 @@ export default {
     }
   },
   beforeDestroy() {
+    this.closeSetDialog();
     this.requestId++;
     if (this.pendingRequest) this.pendingRequest.abort();
     if (typeof window !== "undefined") {
@@ -596,10 +676,44 @@ export default {
     },
     viewSet(product) {
       if (!product || !product.combo) return;
-      this.searchForm = { type: "", code: "", keyword: "" };
-      this.appliedFilters = { type: "", code: "", keyword: "", setGoods: product.id };
-      this.handlePageChange(1);
-      this.closeSelectedPanel();
+      this.setDialog.source = product.id;
+      this.setDialog.code = product.code;
+      this.setDialog.products = [];
+      this.setDialog.count = 0;
+      this.setDialog.visible = true;
+      this.loadSetProducts(1);
+    },
+    closeSetDialog() {
+      this.setRequestId++;
+      if (this.pendingSetRequest) this.pendingSetRequest.abort();
+      this.setDialog.loading = false;
+    },
+    async loadSetProducts(page) {
+      if (this.pendingSetRequest) this.pendingSetRequest.abort();
+      const controller = new AbortController();
+      this.pendingSetRequest = controller;
+      const requestId = ++this.setRequestId;
+      this.setDialog.page = page;
+      this.setDialog.loading = true;
+      this.setDialog.error = "";
+      try {
+        const result = await queryPublicProducts({
+          brand: this.contextBrand,
+          setGoods: this.setDialog.source,
+          page,
+          limit: 60
+        }, controller.signal);
+        if (requestId !== this.setRequestId || !this.setDialog.visible) return;
+        this.setDialog.products = result.info;
+        this.setDialog.page = result.page;
+        this.setDialog.count = Number(result.count) || 0;
+      } catch (error) {
+        if (requestId === this.setRequestId && !controller.signal.aborted) {
+          this.setDialog.error = error.message;
+        }
+      } finally {
+        if (requestId === this.setRequestId) this.setDialog.loading = false;
+      }
     },
     submitSelection() {
       if (this.submitLoading || !this.selectedCount) return;
@@ -652,6 +766,13 @@ export default {
 </script>
 
 <style scoped>
+.setGoodsGrid { grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); }
+.setDialogFooter { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+.setDialogPagination { display: flex; align-items: center; gap: 8px; margin-right: auto; }
+.setGoodsGrid .cardActions { justify-content: flex-end; }
+.setGoodsGrid .addBtn { width: 30px; height: 28px; border: 0; border-radius: 8px; background: #f0f1f3; color: #374151; }
+.setGoodsGrid .addBtn:hover { background: #e4efff; color: #0759b7; }
+
 .publicPickerPage {
   --blue: #0065e8;
   --ink: #101b43;
@@ -832,4 +953,11 @@ export default {
   .publicSelectionSuccess .el-dialog__body { display: flex; align-items: center; justify-content: center; }
   .publicSelectionSuccess .el-dialog__footer { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
 }
+</style>
+
+<style>
+.publicSetDialog { max-width: calc(100vw - 24px); }
+.publicSetDialog .el-dialog__body { max-height: 65vh; overflow-y: auto; overscroll-behavior: contain; }
+.publicSetDialog.is-fullscreen { max-width: 100%; display: flex; flex-direction: column; }
+.publicSetDialog.is-fullscreen .el-dialog__body { flex: 1; max-height: none; }
 </style>

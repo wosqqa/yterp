@@ -5,6 +5,7 @@ class Category extends Validate {
     //常规验证规则
     protected $rule = [
         'name' => ['require'],
+        'name_en' => ['max:100'],
         'pid' => ['require','integer'],
 		'sort' => ['require','integer']
     ];
@@ -12,6 +13,7 @@ class Category extends Validate {
     //常规规则提示
     protected $message = [
         'name.require' => '类别名称不可为空!',
+        'name_en.max' => '英文名称最多100个字符!',
         'pid.require' => '所属类别不可为空!',
         'pid.integer' => '所属类别不正确!',
         'sort.require' => '类别排序不可为空!',
@@ -20,6 +22,6 @@ class Category extends Validate {
 
     //场景规则
     protected $scene = [
-        'update' => ['name','pid','sort']
+        'update' => ['name','name_en','pid','sort']
     ];
 }

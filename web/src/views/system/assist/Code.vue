@@ -13,6 +13,7 @@
 						<el-select v-model="searchFrom.type" placeholder="请选择条码类型" clearable>
 							<el-option label="条形码" :value="1"></el-option>
 							<el-option label="二维码" :value="2"></el-option>
+                            <el-option label="链接" :value="3"></el-option>
 						  </el-select>
 					</el-form-item>
 					<el-form-item>
@@ -42,13 +43,18 @@
 		<el-table :data="tableData" height="calc(100% - 90px)" @selection-change="selectionChange" border v-madeTable>
 			<el-table-column type="selection" align="center" width="39px" fixed="left"></el-table-column>
 			<el-table-column prop="name" label="条码名称" align="center" width="200px"></el-table-column>
-			<el-table-column prop="info" label="条码内容" align="center" width="200px"></el-table-column>
+			<el-table-column prop="info" label="条码内容 / 链接" align="center" min-width="240px">
+                <template slot-scope="scope">
+                    <a v-if="Number(scope.row.type) === 2 && validLink(scope.row.info)" :href="scope.row.info" target="_blank" rel="noopener noreferrer" style="color:#409eff;overflow-wrap:anywhere">{{ scope.row.info }}</a>
+                    <span v-else>{{ scope.row.info }}</span>
+                </template>
+            </el-table-column>
 			<el-table-column prop="extension.type" label="条码类型" align="center" width="200px"></el-table-column>
 			<el-table-column prop="data" label="备注信息 " align="center" width="200px"></el-table-column>
 			<el-table-column prop="set" label="相关操作" align="center" width="200px">
 				<template slot-scope="scope">
 					<el-button-group>
-						<el-button @click="see(scope.row)" size="mini">查看</el-button>
+						<el-button @click="see(scope.row)" size="mini">{{ Number(scope.row.type) === 2 ? "打开链接" : "查看" }}</el-button>
 						<el-button @click="set(scope.row.id)" size="mini">详情</el-button>
 						<template v-if="$lib.getUserRoot(store.root,'assist','del')">
 							<el-button @click="del([scope.row.id])" size="mini">删除</el-button>
@@ -67,13 +73,14 @@
 						<el-form-item label="条码名称">
 							<el-input placeholder="请输入条码名称" v-model="form.name" clearable></el-input>
 						</el-form-item>
-						<el-form-item label="条码内容">
-							<el-input placeholder="请输入条码内容" v-model="form.info" clearable></el-input>
+						<el-form-item :label="Number(form.type) === 2 ? '链接地址' : '条码内容'">
+							<el-input :placeholder="Number(form.type) === 2 ? '请输入完整的 http:// 或 https:// 链接' : '请输入条码内容'" v-model.trim="form.info" maxlength="2048" clearable></el-input>
 						</el-form-item>
 						<el-form-item label="条码类型">
 							<el-select v-model="form.type" placeholder="请选择条码类型">
 								<el-option label="条形码" :value="0"></el-option>
 								<el-option label="二维码" :value="1"></el-option>
+                                <el-option label="链接" :value="2"></el-option>
 							  </el-select>
 						</el-form-item>
 						<el-form-item label="备注信息">
@@ -356,9 +363,20 @@
 				}
 			},
 			//查看条码
-			see(parm){
+			validLink(value) {
+                try {
+                    const url = new URL(value);
+                    return ["http:", "https:"].includes(url.protocol) && !!url.hostname;
+                } catch (error) { return false; }
+            },
+            see(parm){
+                if (Number(parm.type) === 2) {
+                    if (!this.validLink(parm.info)) return this.$message.warning("请输入有效的 http:// 或 https:// 链接");
+                    window.open(parm.info, "_blank", "noopener,noreferrer");
+                    return;
+                }
 				this.view.dialog=true;
-				this.view.src=this.$base.web+'code/view?text='+parm.info+'&type='+(parm.type==0?'txm':'ewm')+'&token='+this.store.token;
+				this.view.src=this.$base.web+'code/view?text='+encodeURIComponent(parm.info)+'&type='+(parm.type==0?'txm':'ewm')+'&token='+this.store.token;
 			},
 			//表格选中数据改变
 			selectionChange(parm) {

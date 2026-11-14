@@ -27,6 +27,10 @@ class Category extends Acl{
         if(isset($input['id'])){
             //验证数据
             try {
+                if (array_key_exists('name_en', $input)) {
+                    if (!is_string($input['name_en'])) throw new ValidateException('英文名称格式不正确!');
+                    $input['name_en'] = trim($input['name_en']);
+                }
                 $input['weight']=$this->normalizeDecimal(isset($input['weight'])?$input['weight']:'0','重量');
                 $input['volume']=$this->normalizeDecimal(isset($input['volume'])?$input['volume']:'0','体积');
                 $input['factory_price']=$this->normalizeDecimal(isset($input['factory_price'])?$input['factory_price']:'0','出厂价',2);

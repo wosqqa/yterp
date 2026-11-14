@@ -21,7 +21,7 @@ class PublicSelection extends BaseController
             $code = $this->text($input, 'code');
             $keyword = $this->text($input, 'keyword');
             $brand = $this->text($input, 'brand');
-            $categories = Db::name('category')->field('id,pid,name,data,sort')->order('sort,id')->select()->toArray();
+            $categories = Db::name('category')->field('id,pid,name,name_en,data,sort')->order('sort,id')->select()->toArray();
             $query = Db::name('goods');
             if ($brand !== '') {
                 $query->where('brand', $brand);
@@ -85,7 +85,7 @@ class PublicSelection extends BaseController
                 $publicCategories[] = [
                     'value' => (int) $row['id'],
                     'parent' => (int) $row['pid'],
-                    'label' => $this->categoryLabel($row),
+                    'label' => trim((string) $row['name_en']) !== '' ? $row['name_en'] : $row['name'],
                 ];
             }
             return json([
@@ -304,38 +304,4 @@ class PublicSelection extends BaseController
         return (floor($raw * 100 + 0.00000001) - 2) / 100;
     }
 
-    protected function categoryLabel(array $row)
-    {
-        $names = [
-            '书包' => 'School Bags', '拉杆书包' => 'Trolley Backpacks',
-            '中号拉杆箱' => 'Medium Trolley Bags', '小号拉杆箱' => 'Small Trolley Bags',
-            '大号书包' => 'Large Backpacks', '特大号书包' => 'Extra Large Backpacks',
-            '中号造型书包' => 'Medium Shaped Backpacks', '中号名字卡片书包' => 'Medium Name-Tag Backpacks',
-            '中号帽子书包' => 'Medium Hooded Backpacks', '小号书包' => 'Small Backpacks',
-            '公仔小包' => 'Mini Character Bags', '午餐包' => 'Lunch Bags',
-            '单层斜挎餐包' => 'Single-Layer Lunch Bags', '硬壳餐包' => 'Hard-Shell Lunch Bags',
-            '手提餐包' => 'Lunch Totes', '方形餐包' => 'Square Lunch Bags',
-            '双层斜挎餐包' => 'Double-Layer Lunch Bags', '饭盒' => 'Lunch Boxes',
-            'T饭盒' => 'T Lunch Boxes', '透明饭盒' => 'Clear Lunch Boxes',
-            'PP饭盒' => 'PP Lunch Boxes', '半圆角饭盒' => 'Rounded Lunch Boxes',
-            '餐具' => 'Cutlery', '文具' => 'Stationery', '水杯' => 'Water Bottles',
-            '四折文具' => 'Four-Fold Stationery Sets', '大号文具' => 'Large Stationery Sets',
-            'A4文具' => 'A4 Stationery Sets', 'A5文具' => 'A5 Stationery Sets',
-            '文具盒' => 'Pencil Boxes', '吸管杯' => 'Straw Bottles',
-            '喷雾杯' => 'Spray Bottles', '4吸管杯' => '400 ml Straw Bottles',
-            '保温杯' => 'Insulated Bottles', '球形盖杯' => 'Round-Cap Bottles',
-            '宽版文具盒' => 'Wide Pencil Cases', '笔袋' => 'Pen Bags',
-            '窄版笔盒' => 'Slim Pencil Cases', '手提笔袋' => 'Pencil Totes',
-            '钱包' => 'Wallets', '铅笔' => 'Pencils', '圆珠笔' => 'Ballpoint Pens',
-            '悦拓' => 'Yuetuo', '盒装套装' => 'Boxed Sets', '手提包' => 'Tote Bags',
-            '品牌书包' => 'Branded Backpacks', '礼品袋' => 'Gift Bags',
-            '硅胶吸管杯' => 'Silicone Straw Bottles', '不锈钢饭盒' => 'Stainless Steel Lunch Boxes',
-        ];
-        if (isset($names[$row['name']])) return $names[$row['name']];
-        foreach (['data', 'name'] as $field) {
-            $label = trim((string) $row[$field]);
-            if (preg_match('/^[a-zA-Z0-9][a-zA-Z0-9 &().\/_-]{0,70}$/', $label)) return $label;
-        }
-        return 'Category ' . (int) $row['id'];
-    }
 }

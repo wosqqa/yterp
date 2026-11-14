@@ -414,6 +414,7 @@ DROP TABLE IF EXISTS `is_category`;
 CREATE TABLE `is_category` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `pid` int(11) NOT NULL COMMENT '所属类别',
+  `name_en` varchar(100) NOT NULL DEFAULT '' COMMENT '类别英文名称',
   `name` varchar(32) NOT NULL COMMENT '类别名称',
   `sort` int(11) DEFAULT '0' COMMENT '类别排序',
   `weight` decimal(16,5) NOT NULL DEFAULT '0.00000' COMMENT '重量kg',
@@ -432,8 +433,8 @@ DROP TABLE IF EXISTS `is_code`;
 CREATE TABLE `is_code` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(32) NOT NULL,
-  `info` varchar(64) NOT NULL,
-  `type` tinyint(1) NOT NULL COMMENT '条码类型[0:条形码 | 1:二维码]',
+  `info` varchar(2048) NOT NULL,
+  `type` tinyint(1) NOT NULL COMMENT '条码类型[0:条形码 | 1:二维码 | 2:链接]',
   `data` varchar(256) NOT NULL,
   PRIMARY KEY (`id`),
   KEY `type` (`type`)

@@ -11,6 +11,7 @@
 		<el-divider></el-divider>
 		<el-table :data="tableData" height="calc(100% - 60px)" :tree-props="{children:'sub'}" row-key="id" border>
 			<el-table-column prop="name" label="类别名称" width="220px"></el-table-column>
+            <el-table-column prop="name_en" label="英文名称" min-width="200px"></el-table-column>
 			<el-table-column prop="sort" label="类别排序" align="center" width="100px"></el-table-column>
 			<el-table-column label="重量(kg)" align="center" width="120px">
 				<template slot-scope="scope">
@@ -46,7 +47,10 @@
 						<el-form-item label="类别名称" prop="name">
 							<el-input placeholder="请输入类别名称" v-model="form.name"></el-input>
 						</el-form-item>
-						<el-form-item label="所属类别" prop="pid">
+						<el-form-item label="英文名称" prop="name_en">
+                            <el-input placeholder="请输入类别英文名称" v-model.trim="form.name_en" maxlength="100" show-word-limit></el-input>
+                        </el-form-item>
+                        <el-form-item label="所属类别" prop="pid">
 							<nodTree v-model="form.pid" :treeData="treeData" placeholder="请选择所属类别"></nodTree>
 						</el-form-item>
 						<el-form-item label="类别排序" prop="sort">
@@ -94,6 +98,7 @@
 				form:{
 					id:0,
 					name:"",
+                    name_en:"",
 					pid:null,
 					sort:0,
 					weight:"0.00000",
@@ -240,7 +245,7 @@
 				if (id > 0) {
 					this.$axios.post("category/get", {id: id}).then(result => {
 						if (result.state == "success") {
-							this.form = result.info;
+							this.form = Object.assign({}, this.$options.data().form, result.info);
 							this.form.weight = this.normalizeDecimal(this.form.weight);
 							this.form.volume = this.normalizeDecimal(this.form.volume);
 							this.form.factory_price = this.normalizeMoney(this.form.factory_price);
