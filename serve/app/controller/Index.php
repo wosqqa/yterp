@@ -4,6 +4,9 @@ use think\facade\View;
 class Index{
     public function index(){
         // 模板输出
-        return View::fetch('index');
+        return response(View::fetch('index'))->header([
+            'Cache-Control' => 'no-store, max-age=0',
+            'Pragma' => 'no-cache',
+        ]);
     }
 }

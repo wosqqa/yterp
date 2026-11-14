@@ -1,7 +1,7 @@
 module.exports = {
     parallel: false,
     assetsDir: 'static',
-    filenameHashing: false,
+    filenameHashing: true,
     productionSourceMap: false,
     devServer: {
         host: '0.0.0.0',
