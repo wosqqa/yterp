@@ -94,7 +94,7 @@
 									<el-input placeholder="请输入客户名称" v-model="form.name" clearable></el-input>
 								</el-form-item>
 								<el-form-item label="客户编号" prop="number">
-									<el-input placeholder="请输入客户编号" v-model="form.number" clearable @input="onFormNumberInput"></el-input>
+									<el-input placeholder="请输入客户编号" v-model="form.number" clearable @input="onFormNumberInput" @blur="recognizeNumberCountry" @change="recognizeNumberCountry"></el-input>
 								</el-form-item>
 								<el-form-item label="所属组织" prop="frame">
 									<nodTree v-model="form.frame" :treeData="store.frame" placeholder="请选择所属组织"></nodTree>
@@ -300,6 +300,7 @@
 	</div>
 </template>
 <script>
+import { countryFromWhatsApp, remarkWithCountry } from "@/config/phoneCountry";
 	import NodTree from "@/components/lib/NodTree";
 	import NodList from "@/components/lib/NodList";
 	import FieldForm from "@/components/lib/FieldForm";
@@ -447,6 +448,11 @@
 			onFormNumberInput(val) {
 				this.form.number = this.cleanCustomerNumber(val);
 			},
+            recognizeNumberCountry() {
+                const country = countryFromWhatsApp(this.form.number);
+                if (country) this.form.data = remarkWithCountry(this.form.data, country);
+            },
+
 			copyText(text) {
 				const val = text == null ? "" : String(text);
 				if (navigator && navigator.clipboard && navigator.clipboard.writeText) {

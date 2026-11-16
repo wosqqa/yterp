@@ -164,7 +164,7 @@
         </div>
       </div>
     </el-dialog>
-    <el-dialog :title="'组合商品 · ' + combo.text" :visible.sync="combo.visible" width="900px" top="5vh" custom-class="adminComboDialog" append-to-body :close-on-click-modal="false" @close="closeCombo">
+    <el-dialog :title="'组合商品 · ' + combo.text" :visible.sync="combo.visible" width="900px" top="5vh" custom-class="adminComboDialog" append-to-body :close-on-click-modal="true" @close="closeCombo">
       <div v-if="combo.loading" class="comboStatus">正在加载组合商品…</div>
       <div v-else-if="combo.error" class="comboStatus">{{ combo.error }} <el-button type="text" @click="recordComboOnly(combo.text, combo.page)">重试</el-button></div>
       <div v-else-if="!combo.products.length" class="comboStatus">暂无组合商品</div>
