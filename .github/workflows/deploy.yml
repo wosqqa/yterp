@@ -21,7 +21,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Build release
         env:
-          VUE_APP_API_BASE: http://erp.51ppy.com/
+          VUE_APP_API_BASE: /
         run: bash scripts/build-release.sh
       - name: Configure deployment SSH
         env:

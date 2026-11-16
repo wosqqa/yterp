@@ -3,7 +3,7 @@
 set -euo pipefail
 repo_dir="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_dir"
-: "${VUE_APP_API_BASE:?请配置生产接口地址，例如 https://erp.51ppy.com/}"
+: "${VUE_APP_API_BASE:=/}"
 export VUE_APP_API_BASE
 if [ "${SKIP_FRONTEND_BUILD:-0}" != 1 ]; then
   (

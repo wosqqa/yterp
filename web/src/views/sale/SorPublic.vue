@@ -331,25 +331,9 @@
 
 <script>
 import axios from "axios";
+import { getApiBase } from "@/config/base";
 
-function getApiBase() {
-  try {
-    if (typeof window !== "undefined" && window.location) {
-      const host = window.location.host;
-      const hostname = (window.location.hostname || "").toLowerCase();
-      const protocol = window.location.protocol || "http:";
-      const port = window.location.port || "";
-      const portNum = port ? Number(port) : 0;
-      const isLocalHost = hostname === "127.0.0.1" || hostname === "localhost" || hostname === "localhost.localdomain";
-      const isFrontendDevPort = portNum >= 8080 && portNum <= 8099;
-      if (portNum === 8084 || (isLocalHost && isFrontendDevPort)) {
-        return "http://erp.51ppy.com/";
-      }
-      return `${protocol}//${host}/`;
-    }
-  } catch (e) {}
-  return "http://127.0.0.1:8000/";
-}
+
 
 const publicAxios = axios.create({
   baseURL: getApiBase(),

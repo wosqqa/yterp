@@ -14,8 +14,8 @@ export default new Vuex.Store({
     },
     Token: "",
     sys: {
-      name: "点可云进销存软件",
-      company: "山西点可云科技有限公司",
+      name: "悦拓进销存软件",
+      company: "悦拓",
       icp: "ICP备案号码",
       notice: "",
     },

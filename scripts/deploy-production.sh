@@ -40,8 +40,8 @@ docker exec -w /www/sites/erp.51ppy.com/index "$container" php think clear
 docker exec "$container" kill -USR2 1
 healthy=0
 for attempt in 1 2 3 4 5; do
-  if curl -fsS --max-time 15 -H 'Host: erp.51ppy.com' http://127.0.0.1/ | grep -q 'static/'; then
-    response="$(curl -fsS --max-time 20 -H 'Host: erp.51ppy.com' -H 'Content-Type: application/json' -d '{"limit":1}' http://127.0.0.1/publicSelection/catalog)" || response=''
+  if curl -fsS --max-time 15 -H 'Host: erp.kimbag.com' http://127.0.0.1/ | grep -q 'static/'; then
+    response="$(curl -fsS --max-time 20 -H 'Host: erp.kimbag.com' -H 'Content-Type: application/json' -d '{"limit":1}' http://127.0.0.1/publicSelection/catalog)" || response=''
     if printf '%s' "$response" | grep -Eq '"state"[[:space:]]*:[[:space:]]*"success"'; then healthy=1; break; fi
   fi
   sleep 3
