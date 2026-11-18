@@ -2,6 +2,7 @@
 namespace app\controller;
 
 use app\BaseController;
+use app\service\CustomerPhone;
 use think\facade\{Cache, Db, Log};
 
 // 客户选款专用入口，不放开内部 Service/Sor 的登录限制。
@@ -76,6 +77,7 @@ class PublicSelection extends BaseController
                     'image' => $this->image($row['imgs']),
                     'combo' => $this->combo($row['data']),
                     'price' => $rate ? number_format((float) $row['sell'] / $rate['effective'], 2, '.', '') : null,
+                    'priceCny' => number_format((float) $row['sell'], 4, '.', ''),
                     'currency' => 'USD',
                 ];
             }
@@ -113,13 +115,21 @@ class PublicSelection extends BaseController
             if (!$user || !Db::name('user')->where('id', $user)->find()) {
                 throw new \InvalidArgumentException('Invalid sales link. Please contact your salesperson.');
             }
+            // 链接 salesId 是人员编号，不是人员表主键；制单用户保持原有逻辑。
+            $salesNumber = (string)$user;
+            $peopleRows = Db::name('people')->where('number', $salesNumber)->limit(2)->select()->toArray();
+            if (count($peopleRows) !== 1) {
+                throw new \InvalidArgumentException('Invalid salesperson number. Please contact your salesperson.');
+            }
+            $peopleId = (int)$peopleRows[0]['id'];
             $customer = $input['customer'] ?? [];
             if (!is_array($customer)) throw new \InvalidArgumentException('Invalid customer.');
             $name = $this->text($customer, 'name');
             $phone = $this->text($customer, 'phone');
             $country = $this->text($customer, 'country');
             $note = $this->text($customer, 'note');
-            $normalized = preg_replace('/[^0-9]/', '', $phone);
+            $normalized = CustomerPhone::normalize($phone);
+            $phoneCountry = CustomerPhone::country($phone);
             if (!$name || mb_strlen($name)>32 || !$country || mb_strlen($phone)>32 || strlen($normalized)<6 || strlen($normalized)>20) {
                 throw new \InvalidArgumentException('Please check your name, phone and country.');
             }
@@ -135,28 +145,46 @@ class PublicSelection extends BaseController
                 if (!$id || !$qty || isset($quantities[$id])) throw new \InvalidArgumentException('Invalid item quantity.');
                 $quantities[$id] = $qty;
             }
-            $number = 'XS' . substr(hash('sha256', $user . ':' . $key), 0, 28);
-            $result = Db::transaction(function () use ($user, $name, $phone, $normalized, $country, $note, $quantities, $number) {
+            $submissionHash = hash('sha256', $user . ':' . $key);
+            $legacyNumber = 'XS' . substr($submissionHash, 0, 28);
+            $submissionMeta = json_encode(['publicSubmissionKey'=>$submissionHash]);
+            $result = Db::transaction(function () use ($user, $peopleId, $name, $phone, $normalized, $phoneCountry, $country, $note, $quantities, $legacyNumber, $submissionMeta) {
                 // 锁定默认组织，防止不同销售并发提交相同电话时重复建客户。
                 Db::name('frame')->where('id', 0)->lock(true)->find();
-                $existing = Db::name('sor')->where('number', $number)->find();
+                $existing = Db::name('sor')->where(function ($q) use ($legacyNumber, $submissionMeta) {
+                    $q->where('number',$legacyNumber)->whereOr('more',$submissionMeta);
+                })->find();
                 if ($existing) return ['number'=>$existing['number']];
+                // 与后台 XSDD + YYMMDDHHmmssS 一致，客户选品使用 XPDD 前缀。
+                do {
+                    $now = new \DateTimeImmutable();
+                    $number = 'XPDD' . $now->format('ymdHis') . substr($now->format('v'),0,1);
+                    $collision = Db::name('sor')->where('number',$number)->count();
+                    if ($collision) usleep(1000);
+                } while ($collision);
                 $goods = Db::name('goods')->whereIn('id', array_keys($quantities))->select()->toArray();
                 if (count($goods)!==count($quantities)) throw new \InvalidArgumentException('Some products are no longer available.');
                 $cid = null;
                 foreach (Db::name('customer')->select() as $row) {
-                    if (preg_replace('/[^0-9]/', '', (string)$row['number']) === $normalized) {
-                        $cid = $row['id']; break;
+                    if (CustomerPhone::normalize($row['number']) === $normalized) {
+                        $cid = $row['id']; $existingCustomer = $row; break;
                     }
                 }
-                $remark = mb_substr('Country: '.$country.'; '.$note, 0, 256);
+                $remark = mb_substr(CustomerPhone::remark($note, $phoneCountry ?: $country), 0, 256);
                 if (!$cid) {
                     $cid = Db::name('customer')->insertGetId([
-                        'name'=>$name, 'py'=>'', 'number'=>$phone,
+                        'name'=>$name, 'py'=>'', 'number'=>$normalized,
                         'frame'=>0, 'user'=>$user, 'category'=>'常规类别', 'grade'=>'常规等级',
                         'bank'=>'', 'account'=>'', 'tax'=>'', 'data'=>$remark,
-                        'contacts'=>json_encode([['name'=>$name,'tel'=>$phone,'add'=>$country,'main'=>true]], JSON_UNESCAPED_UNICODE),
+                        'contacts'=>json_encode([['name'=>$name,'tel'=>$normalized,'add'=>$country,'main'=>true]], JSON_UNESCAPED_UNICODE),
                         'balance'=>0, 'more'=>'{}'
+                    ]);
+                }
+                else {
+                    // 老客户保留原姓名、归属和备注，仅规范编号并更新识别出的国家。
+                    Db::name('customer')->where('id',$cid)->update([
+                        'number'=>$normalized,
+                        'data'=>mb_substr(CustomerPhone::remark($existingCustomer['data'], $phoneCountry),0,256)
                     ]);
                 }
                 // 与选品目录一致：sell 为人民币售价，不从美元报价反算。
@@ -169,8 +197,8 @@ class PublicSelection extends BaseController
                 }
                 $id = Db::name('sor')->insertGetId([
                     'frame'=>0, 'customer'=>$cid, 'time'=>time(), 'number'=>$number,
-                    'total'=>$total, 'actual'=>$total, 'people'=>0, 'arrival'=>0,
-                    'logistics'=>'{}', 'file'=>'[]', 'more'=>'{}', 'examine'=>0, 'state'=>0, 'user'=>$user,
+                    'total'=>$total, 'actual'=>$total, 'people'=>$peopleId, 'arrival'=>0,
+                    'logistics'=>'{}', 'file'=>'[]', 'more'=>$submissionMeta, 'examine'=>0, 'state'=>0, 'user'=>$user,
                     'data'=>mb_substr('线上选品；'.$name.'; '.$phone.'; '.$remark, 0, 256)
                 ]);
                 foreach ($goods as $g) {

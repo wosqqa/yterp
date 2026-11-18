@@ -45,11 +45,16 @@
           <button type="button" class="primary searchBtn" @click="applyFilters">{{ loading ? 'Searching...' : 'Search' }}</button>
         </div>
         <div class="catalogStatus">
-          <span v-if="exchangeRate" :title="'Reference: ' + exchangeRate.raw + ' CNY/USD. Rounded down to 2 decimals, then minus 0.02.'">
+          <span v-if="showUsd && exchangeRate" :title="'Reference: ' + exchangeRate.raw + ' CNY/USD. Rounded down to 2 decimals, then minus 0.02.'">
             USD prices · $1 = CNY {{ Number(exchangeRate.effective).toFixed(2) }}
             · {{ exchangeRate.date }} · {{ exchangeRate.source }}
           </span>
-          <span v-else-if="priceWarning" class="priceWarning">{{ priceWarning }} <button type="button" @click="loadProducts">Retry</button></span>
+          <span v-else-if="showUsd && priceWarning" class="priceWarning">{{ priceWarning }} <button type="button" @click="loadProducts">Retry</button></span>
+          <span v-if="!showUsd">CNY prices</span>
+          <label class="currencySwitch">
+            <el-switch class="compactCurrencySwitch" v-model="showUsd" :width="30" active-color="#635bff" aria-label="Show USD prices" />
+            <span>{{ showUsd ? 'USD' : 'CNY' }}</span>
+          </label>
           <button v-if="appliedFilters.setGoods" class="backToCatalog" type="button" @click="clearFilters">All styles</button>
         </div>
       </div>
@@ -80,7 +85,7 @@
                 <div class="cardMeta">
                   <div class="codeRow">
                     <span class="codeText">{{ item.code }}</span>
-                    <span class="priceText">{{ formatUsd(item.price) }}</span>
+                    <span class="priceText">{{ formatPrice(productPrice(item)) }}</span>
                   </div>
                 </div>
                 <div class="cardActions">
@@ -268,7 +273,7 @@
                 <div class="cardMeta">
                   <div class="codeRow">
                     <span class="codeText">{{ item.code }}</span>
-                    <span class="priceText">{{ formatUsd(item.price) }}</span>
+                    <span class="priceText">{{ formatPrice(productPrice(item)) }}</span>
                   </div>
                 </div>
                 <div class="cardActions">
@@ -379,6 +384,7 @@ export default {
       loadError: "",
       priceWarning: "",
       exchangeRate: null,
+      showUsd: true,
       requestId: 0,
       pageInput: 1,
       page: {
@@ -467,12 +473,13 @@ export default {
       return this.selectedList.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
     },
     selectedTotalAmount() {
-      const total = this.selectedList.reduce((sum, item) => {
-        const price = Number(item && item.price);
-        const qty = Number(item && item.qty) || 0;
-        return Number.isFinite(price) ? sum + price * qty : sum;
-      }, 0);
-      return this.formatUsd(total, true);
+      let total = 0;
+      for (const item of this.selectedList) {
+        const price = this.productPrice(item);
+        if (price === null) return "--";
+        total += price * (Number(item.qty) || 0);
+      }
+      return this.formatPrice(total, true);
     }
   },
   created() {
@@ -592,10 +599,14 @@ export default {
         if (id === this.requestId) this.loading = false;
       }
     },
-    formatUsd(price, keepZeros) {
+    productPrice(item) {
+      const price = item && (this.showUsd ? item.price : item.priceCny);
+      return price == null || price === "" || !Number.isFinite(Number(price)) ? null : Number(price);
+    },
+    formatPrice(price, keepZeros) {
       if (price == null || price === "" || !Number.isFinite(Number(price))) return "--";
       const fixed = Number(price).toFixed(2);
-      return "$" + (keepZeros ? fixed : fixed.replace(/\.00$/, ""));
+      return (this.showUsd ? "$" : "¥") + (keepZeros ? fixed : fixed.replace(/\.00$/, ""));
     },
     qtyDraftValue(id) {
       const key = String(id);
@@ -636,10 +647,10 @@ export default {
       this.qtyDrafts = Object.assign({}, this.qtyDrafts, { [key]: String(nextQty) });
     },
     selectedItemAmount(item) {
-      const price = Number(item && item.price);
+      const price = this.productPrice(item);
       const qty = Number(item && item.qty) || 0;
-      if (!Number.isFinite(price)) return "--";
-      return this.formatUsd(price * qty, true);
+      if (price === null) return "--";
+      return this.formatPrice(price * qty, true);
     },
     pickedQty(id) {
       const item = this.selectedMap[String(id)];
@@ -766,6 +777,10 @@ export default {
 </script>
 
 <style scoped>
+.compactCurrencySwitch >>> .el-switch__core { height: 16px; border-radius: 9px; }
+.compactCurrencySwitch >>> .el-switch__core::after { width: 12px; height: 12px; }
+.compactCurrencySwitch.is-checked >>> .el-switch__core::after { margin-left: -13px; }
+.currencySwitch { display: inline-flex; align-items: center; gap: 7px; color: #536077; cursor: pointer; white-space: nowrap; }
 .setGoodsGrid { grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); }
 .setDialogFooter { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
 .setDialogPagination { display: flex; align-items: center; gap: 8px; margin-right: auto; }

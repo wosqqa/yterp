@@ -1,6 +1,7 @@
 <template>
 	<div class="customer area">
 		<div class="layout">
+			<div class="customerTools">
 			<el-popover ref="searchPopover" popper-class="searchPopover" placement="bottom-start">
 				<el-form class="searchFrom" ref="searchFrom"  inline>
 					<el-form-item>
@@ -41,6 +42,14 @@
 				<el-button slot="reference" icon="el-icon-more" ></el-button>
 			</el-popover>
 			<el-button-group>
+				<el-button @click="$router.push('/system/freight')">货代管理</el-button>
+				<el-button type="primary" @click="$router.push('/system/customerCare')">客户维护</el-button>
+				<template v-if="store.root == 'all'">
+					<el-button type="primary" @click="goReport" >客户报表</el-button>
+				</template>
+			</el-button-group>
+			</div>
+			<el-button-group>
 				<template v-if="tableSelection.length!=0">
 					<template v-if="$lib.getUserRoot(store.root,'base','del')">
 						<el-button @click="del(tableSelection)"  type="info">删除</el-button>
@@ -53,9 +62,6 @@
 					<el-button @click="batch.dialog=true" >批量</el-button>
 				</template>
 				<el-button @click="reload" >刷新</el-button>
-				<template v-if="store.root == 'all'">
-					<el-button type="primary" @click="goReport" >客户报表</el-button>
-				</template>
 			</el-button-group>
 		</div>
 		<el-divider></el-divider>
@@ -894,6 +900,11 @@ import { countryFromWhatsApp, remarkWithCountry } from "@/config/phoneCountry";
 	.layout {
 		display: flex;
 		justify-content: space-between;
+	}
+	.customerTools {
+		display: flex;
+		align-items: center;
+		gap: 12px;
 	}
 	.ordersPane {
 		width: 100%;

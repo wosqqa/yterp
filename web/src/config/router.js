@@ -101,6 +101,8 @@ const Goods = () =>
   import(/* webpackChunkName: 'n'*/ "@/views/system/base/Goods");
 const GoodsQuote = () =>
   import(/* webpackChunkName: 'n'*/ "@/views/system/base/GoodsQuote");
+const Freight = () => import("@/views/system/base/Freight");
+const CustomerCare = () => import("@/views/system/base/CustomerCare");
 const CustomerReport = () =>
   import(/* webpackChunkName: 'n'*/ "@/views/system/base/CustomerReport");
 //辅助资料
@@ -741,6 +743,12 @@ const example = new Router({
           meta: {
             title: "商品报价表",
           },
+        },
+        {
+          path: "freight", name: "freight", component: Freight, meta: { title: "货代管理" }
+        },
+        {
+          path: "customerCare", name: "customerCare", component: CustomerCare, meta: { title: "客户维护" }
         },
         {
           path: "customerReport",

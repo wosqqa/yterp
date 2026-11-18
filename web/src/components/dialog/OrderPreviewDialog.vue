@@ -8,7 +8,7 @@
   >
     <transition name="el-fade-in">
       <template v-if="visible && sourceNumber">
-        <SorPrint action="sell/get" :source="sourceNumber"></SorPrint>
+        <SorPrint :action="action" :source="sourceNumber"></SorPrint>
       </template>
     </transition>
   </el-dialog>
@@ -23,6 +23,7 @@ export default {
     SorPrint,
   },
   props: {
+    action: { type: String, default: "sell/get" },
     value: {
       default: false,
     },

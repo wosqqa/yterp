@@ -14,8 +14,9 @@ export function countryFromWhatsApp(value) {
 export function remarkWithCountry(remark, country) {
   if (!country) return remark;
   const lines = String(remark || "").split("\n");
-  const index = lines.findIndex(line => line.startsWith("国家/地区："));
-  if (index >= 0) lines[index] = "国家/地区：" + country;
-  else lines.push("国家/地区：" + country);
+  const names = new Set(Object.values(countryNames));
+  const index = lines.findIndex(line => line.trim().startsWith("国家/地区：") || names.has(line.trim()));
+  if (index >= 0) lines[index] = country;
+  else lines.push(country);
   return lines.filter(line => line.trim()).join("\n");
 }
